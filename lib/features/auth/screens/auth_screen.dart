@@ -122,7 +122,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
         _authToken = token;
         _authTokenType = tokenType;
         _checkingStoredToken = false;
-        _step = AuthStep.verification;
+        _step = AuthStep.profile;
       });
       return;
     }
@@ -180,6 +180,8 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   }
 
   Future<void> _requestOtp(AuthStep sourceStep) async {
+    if (_sendingOtp) return;
+
     final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) {
       _showErrorMessage('Enter your phone number');
@@ -188,6 +190,22 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
 
     setState(() => _sendingOtp = true);
     try {
+      final registrationStatus = await widget.authApi.isRegistered(
+        SellerRegistrationStatusRequest(phoneNumber: _apiPhoneNumber),
+      );
+
+      if (!mounted) return;
+
+      if (sourceStep == AuthStep.phone && !registrationStatus.isRegistered) {
+        _showInfoMessage(registrationStatus.message);
+        return;
+      }
+
+      if (sourceStep == AuthStep.signup && registrationStatus.isRegistered) {
+        _showInfoMessage('This number is already registered. Please sign in.');
+        return;
+      }
+
       final deviceIdentity = await widget.deviceIdentityProvider.load();
       final result = await widget.authApi.sendOtp(
         SellerOtpRequest(
@@ -204,6 +222,46 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       }
     } on SellerAuthException catch (error) {
       if (mounted) _showErrorMessage(error.message);
+    } finally {
+      if (mounted) setState(() => _sendingOtp = false);
+    }
+  }
+
+  Future<bool> _resendOtp() async {
+    if (_sendingOtp) return false;
+
+    final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) {
+      _showErrorMessage('Enter your phone number');
+      return false;
+    }
+
+    setState(() => _sendingOtp = true);
+    try {
+      final deviceIdentity = await widget.deviceIdentityProvider.load();
+      final result = await widget.authApi.sendOtp(
+        SellerOtpRequest(
+          phoneNumber: _apiPhoneNumber,
+          deviceIdentity: deviceIdentity,
+        ),
+      );
+
+      if (!mounted) return false;
+      for (final controller in _otpControllers) {
+        controller.clear();
+      }
+      if (_otpFocusNodes.isNotEmpty) {
+        _otpFocusNodes.first.requestFocus();
+      }
+      setState(() => _sentOtp = result.otp);
+      _showInfoMessage(result.message);
+      if (result.otp != null) {
+        _showOtpMessage(result.otp!);
+      }
+      return true;
+    } on SellerAuthException catch (error) {
+      if (mounted) _showErrorMessage(error.message);
+      return false;
     } finally {
       if (mounted) setState(() => _sendingOtp = false);
     }
@@ -247,15 +305,34 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   }
 
   void _showInfoMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    _showToast(message);
   }
 
   void _showErrorMessage(String message) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
+    _showToast(message, backgroundColor: palette.error);
+  }
+
+  void _showToast(String message, {Color? backgroundColor}) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(backgroundColor: palette.error, content: Text(message)),
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: backgroundColor ?? palette.greenDark,
+        margin: const EdgeInsets.fromLTRB(18, 0, 18, 22),
+        elevation: 0,
+        duration: const Duration(milliseconds: 2200),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: Text(
+          message,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 
@@ -321,10 +398,6 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       _profile = profile;
       _step = AuthStep.profile;
     });
-  }
-
-  void _showDoneMessage() {
-    _showInfoMessage('Seller account setup complete');
   }
 
   @override
@@ -410,7 +483,9 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
                 onOtpChanged: (_) => setState(() {}),
                 onBack: _goBack,
                 onChangeNumber: () => _goTo(_otpSourceStep),
+                onResendOtp: _resendOtp,
                 loading: _verifyingOtp,
+                resending: _sendingOtp,
                 onVerify: _verifyOtp,
               ),
               AuthStep.credentials => CredentialsAuthScreen(

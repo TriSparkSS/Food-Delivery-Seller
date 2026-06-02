@@ -16,7 +16,9 @@ class OtpAuthScreen extends StatefulWidget {
     required this.onBack,
     required this.onChangeNumber,
     required this.onVerify,
+    required this.onResendOtp,
     this.loading = false,
+    this.resending = false,
     super.key,
   });
 
@@ -29,7 +31,9 @@ class OtpAuthScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onChangeNumber;
   final VoidCallback onVerify;
+  final Future<bool> Function() onResendOtp;
   final bool loading;
+  final bool resending;
 
   @override
   State<OtpAuthScreen> createState() => _OtpAuthScreenState();
@@ -86,6 +90,15 @@ class _OtpAuthScreenState extends State<OtpAuthScreen> {
 
       setState(() => _remainingSeconds--);
     });
+  }
+
+  Future<void> _handleResend() async {
+    if (_remainingSeconds > 0 || widget.resending) return;
+
+    final sent = await widget.onResendOtp();
+    if (sent && mounted) {
+      _startTimer();
+    }
   }
 
   @override
@@ -160,7 +173,7 @@ class _OtpAuthScreenState extends State<OtpAuthScreen> {
                   WidgetSpan(
                     alignment: PlaceholderAlignment.middle,
                     child: GestureDetector(
-                      onTap: _startTimer,
+                      onTap: _handleResend,
                       behavior: HitTestBehavior.opaque,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -168,7 +181,7 @@ class _OtpAuthScreenState extends State<OtpAuthScreen> {
                           vertical: 2,
                         ),
                         child: Text(
-                          'Resend code',
+                          widget.resending ? 'Sending...' : 'Resend code',
                           style: muted.copyWith(
                             color: palette.greenDark,
                             fontWeight: FontWeight.w600,

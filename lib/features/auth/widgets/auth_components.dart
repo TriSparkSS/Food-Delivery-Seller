@@ -363,12 +363,16 @@ class AuthInputShell extends StatelessWidget {
     required this.child,
     this.highlighted = false,
     this.error = false,
+    this.height = 58,
+    this.padding = const EdgeInsets.symmetric(horizontal: 18),
     super.key,
   });
 
   final Widget child;
   final bool highlighted;
   final bool error;
+  final double height;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
@@ -377,8 +381,8 @@ class AuthInputShell extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      height: height,
+      padding: padding,
       decoration: BoxDecoration(
         color: palette.fieldFill,
         borderRadius: BorderRadius.circular(16),
@@ -411,12 +415,16 @@ class PhoneNumberField extends StatefulWidget {
     required this.controller,
     required this.country,
     required this.onCountryChanged,
+    this.readOnly = false,
+    this.compact = false,
     super.key,
   });
 
   final TextEditingController controller;
   final PhoneCountry country;
   final ValueChanged<PhoneCountry> onCountryChanged;
+  final bool readOnly;
+  final bool compact;
 
   @override
   State<PhoneNumberField> createState() => _PhoneNumberFieldState();
@@ -428,7 +436,8 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
   bool get _hasDigits =>
       widget.controller.text.replaceAll(RegExp(r'\D'), '').isNotEmpty;
 
-  bool get _highlighted => _focusNode.hasFocus || _hasDigits;
+  bool get _highlighted =>
+      !widget.readOnly && (_focusNode.hasFocus || _hasDigits);
 
   @override
   void initState() {
@@ -475,6 +484,8 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
   }
 
   Future<void> _openCountryPicker() async {
+    if (widget.readOnly) return;
+
     _focusNode.unfocus();
     final country = await showModalBottomSheet<PhoneCountry>(
       context: context,
@@ -496,10 +507,12 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
 
     return AuthInputShell(
       highlighted: _highlighted,
+      height: widget.compact ? 46 : 58,
+      padding: EdgeInsets.symmetric(horizontal: widget.compact ? 13 : 18),
       child: Row(
         children: [
           InkWell(
-            onTap: _openCountryPicker,
+            onTap: widget.readOnly ? null : _openCountryPicker,
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
@@ -508,16 +521,16 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
                 children: [
                   Text(
                     widget.country.flag,
-                    style: const TextStyle(fontSize: 23),
+                    style: TextStyle(fontSize: widget.compact ? 19 : 23),
                   ),
-                  const SizedBox(width: 9),
+                  SizedBox(width: widget.compact ? 7 : 9),
                   Text(
                     widget.country.dialCode,
                     style: TextStyle(
                       color: _highlighted
                           ? palette.greenDark
                           : palette.mutedText,
-                      fontSize: 17,
+                      fontSize: widget.compact ? 14 : 17,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -525,7 +538,7 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
                   Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: _highlighted ? palette.greenDark : palette.mutedText,
-                    size: 19,
+                    size: widget.compact ? 16 : 19,
                   ),
                 ],
               ),
@@ -533,8 +546,11 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
           ),
           Container(
             width: 1,
-            height: 24,
-            margin: const EdgeInsets.only(left: 10, right: 14),
+            height: widget.compact ? 20 : 24,
+            margin: EdgeInsets.only(
+              left: widget.compact ? 8 : 10,
+              right: widget.compact ? 11 : 14,
+            ),
             color: palette.fieldBorder,
           ),
           Expanded(
@@ -542,12 +558,15 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
               controller: widget.controller,
               focusNode: _focusNode,
               keyboardType: TextInputType.phone,
+              readOnly: widget.readOnly,
+              canRequestFocus: !widget.readOnly,
+              enableInteractiveSelection: !widget.readOnly,
               inputFormatters: [PhoneNumberInputFormatter(widget.country)],
               style: TextStyle(
                 color: palette.text,
-                fontSize: 19,
+                fontSize: widget.compact ? 15 : 19,
                 fontWeight: FontWeight.w400,
-                letterSpacing: 1.4,
+                letterSpacing: widget.compact ? 0.8 : 1.4,
               ),
               decoration: InputDecoration(
                 border: InputBorder.none,
@@ -735,6 +754,7 @@ class CredentialsField extends StatefulWidget {
     this.trailing,
     this.keyboardType,
     this.errorText,
+    this.hintText,
     super.key,
   });
 
@@ -744,6 +764,7 @@ class CredentialsField extends StatefulWidget {
   final Widget? trailing;
   final TextInputType? keyboardType;
   final String? errorText;
+  final String? hintText;
 
   @override
   State<CredentialsField> createState() => _CredentialsFieldState();
@@ -781,10 +802,12 @@ class _CredentialsFieldState extends State<CredentialsField> {
         AuthInputShell(
           highlighted: _focusNode.hasFocus,
           error: hasError,
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
           child: Row(
             children: [
-              SizedBox(width: 28, child: Center(child: widget.leading)),
-              const SizedBox(width: 10),
+              SizedBox(width: 24, child: Center(child: widget.leading)),
+              const SizedBox(width: 9),
               Expanded(
                 child: TextField(
                   controller: widget.controller,
@@ -793,13 +816,20 @@ class _CredentialsFieldState extends State<CredentialsField> {
                   obscureText: widget.obscureText,
                   style: TextStyle(
                     color: palette.text,
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.w400,
                     letterSpacing: widget.obscureText ? 3 : 0,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     border: InputBorder.none,
                     isCollapsed: true,
+                    hintText: widget.hintText,
+                    hintStyle: TextStyle(
+                      color: palette.mutedText.withValues(alpha: 0.62),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ),
               ),

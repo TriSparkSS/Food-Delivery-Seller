@@ -160,6 +160,7 @@ class _CredentialsAuthScreenState extends State<CredentialsAuthScreen> {
               controller: widget.emailController,
               keyboardType: TextInputType.emailAddress,
               leading: const Icon(Icons.mail_outline_rounded, size: 22),
+              hintText: 'Enter email address',
               errorText: _visibleError(_emailError),
             ),
             const SizedBox(height: 24),
@@ -169,6 +170,7 @@ class _CredentialsAuthScreenState extends State<CredentialsAuthScreen> {
               controller: widget.passwordController,
               obscureText: widget.hidePassword,
               leading: Icon(Icons.lock, color: palette.text, size: 22),
+              hintText: 'Create password',
               errorText: _visibleError(_passwordError),
               trailing: IconButton(
                 onPressed: widget.onTogglePassword,
@@ -188,6 +190,7 @@ class _CredentialsAuthScreenState extends State<CredentialsAuthScreen> {
               controller: widget.confirmPasswordController,
               obscureText: widget.confirmPassword,
               leading: Icon(Icons.lock, color: palette.text, size: 22),
+              hintText: 'Confirm password',
               errorText: _visibleError(_confirmPasswordError),
               trailing: IconButton(
                 onPressed: widget.onToggleCPassword,

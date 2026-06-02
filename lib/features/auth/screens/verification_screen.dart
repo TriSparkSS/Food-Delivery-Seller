@@ -115,12 +115,20 @@ class _VerificationScreenState extends State<VerificationScreen> {
         token: token,
         tokenType: tokenType,
       );
+
+      if (profile.isVerificationFailed) {
+        final diditStatus = 'Didit status: ${profile.verificationStatusLabel}';
+        _setStatus(diditStatus);
+        _showMessage(diditStatus);
+        return;
+      }
+
       loadedProfile = profile;
     } on SellerAuthException catch (error) {
       _setStatus(error.message);
       _showMessage(error.message);
     } catch (error) {
-      final message = 'Unable to fetch verified profile: $error';
+      const message = 'Unable to fetch profile. Please try again.';
       _setStatus(message);
       _showMessage(message);
     } finally {

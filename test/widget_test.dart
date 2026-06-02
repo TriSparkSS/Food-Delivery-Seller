@@ -120,6 +120,16 @@ class _FakeSellerAuthApi implements SellerAuthApi {
   const _FakeSellerAuthApi();
 
   @override
+  Future<SellerRegistrationStatusResponse> isRegistered(
+    SellerRegistrationStatusRequest request,
+  ) async {
+    return const SellerRegistrationStatusResponse(
+      message: 'Seller registration status fetched successfully.',
+      isRegistered: false,
+    );
+  }
+
+  @override
   Future<SellerSendOtpResponse> sendOtp(SellerOtpRequest request) async {
     return const SellerSendOtpResponse(message: 'OTP sent', otp: '296587');
   }
