@@ -147,6 +147,7 @@ class _PhoneStepContent extends StatelessWidget {
       children: [
         AuthHeaderBlock(
           stepIndex: 0,
+          showStepIndicator: false,
           icon: icon,
           title: title,
           subtitle: subtitle,

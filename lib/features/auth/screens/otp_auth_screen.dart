@@ -8,6 +8,7 @@ import '../widgets/auth_components.dart';
 class OtpAuthScreen extends StatefulWidget {
   const OtpAuthScreen({
     required this.phoneNumber,
+    required this.otp,
     required this.controllers,
     required this.focusNodes,
     required this.otpComplete,
@@ -20,6 +21,7 @@ class OtpAuthScreen extends StatefulWidget {
   });
 
   final String phoneNumber;
+  final String? otp;
   final List<TextEditingController> controllers;
   final List<FocusNode> focusNodes;
   final bool otpComplete;
@@ -104,6 +106,7 @@ class _OtpAuthScreenState extends State<OtpAuthScreen> {
           children: [
             AuthHeaderBlock(
               stepIndex: 1,
+              showStepIndicator: false,
               icon: const Icon(
                 Icons.lock_open_rounded,
                 color: Colors.amber,
@@ -121,6 +124,16 @@ class _OtpAuthScreenState extends State<OtpAuthScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (widget.otp != null) ...[
+                      const TextSpan(text: '\nOTP: '),
+                      TextSpan(
+                        text: widget.otp,
+                        style: TextStyle(
+                          color: palette.greenDark,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -14,6 +14,7 @@ class CredentialsAuthScreen extends StatefulWidget {
     required this.onToggleCPassword,
     required this.onBack,
     required this.onContinue,
+    this.loading = false,
     super.key,
   });
 
@@ -25,7 +26,13 @@ class CredentialsAuthScreen extends StatefulWidget {
   final VoidCallback onTogglePassword;
   final VoidCallback onToggleCPassword;
   final VoidCallback onBack;
-  final VoidCallback onContinue;
+  final bool loading;
+  final Future<void> Function({
+    required String email,
+    required String password,
+    required String passwordConfirmation,
+  })
+  onContinue;
 
   @override
   State<CredentialsAuthScreen> createState() => _CredentialsAuthScreenState();
@@ -116,7 +123,11 @@ class _CredentialsAuthScreenState extends State<CredentialsAuthScreen> {
   void _handleContinue() {
     setState(() => _showValidation = true);
     if (_isValid) {
-      widget.onContinue();
+      widget.onContinue(
+        email: widget.emailController.text.trim(),
+        password: widget.passwordController.text,
+        passwordConfirmation: widget.confirmPasswordController.text,
+      );
     }
   }
 
@@ -133,6 +144,7 @@ class _CredentialsAuthScreenState extends State<CredentialsAuthScreen> {
           children: [
             AuthHeaderBlock(
               stepIndex: 2,
+              showStepIndicator: false,
               icon: const Icon(
                 Icons.mail_outline_rounded,
                 color: Colors.white,
@@ -189,7 +201,11 @@ class _CredentialsAuthScreenState extends State<CredentialsAuthScreen> {
               ),
             ),
             const SizedBox(height: 28),
-            PrimaryAuthButton(label: 'Continue', onPressed: _handleContinue),
+            PrimaryAuthButton(
+              label: 'Continue',
+              loading: widget.loading,
+              onPressed: _handleContinue,
+            ),
           ],
         ),
       ),
