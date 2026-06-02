@@ -218,6 +218,7 @@ class AuthHeaderBlock extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.showStepIndicator = true,
     super.key,
   });
 
@@ -225,6 +226,7 @@ class AuthHeaderBlock extends StatelessWidget {
   final Widget icon;
   final String title;
   final Widget subtitle;
+  final bool showStepIndicator;
 
   @override
   Widget build(BuildContext context) {
@@ -232,8 +234,10 @@ class AuthHeaderBlock extends StatelessWidget {
 
     return Column(
       children: [
-        AuthStepIndicator(activeIndex: stepIndex),
-        const SizedBox(height: 28),
+        if (showStepIndicator) ...[
+          AuthStepIndicator(activeIndex: stepIndex),
+          const SizedBox(height: 28),
+        ],
         AuthIconTile(child: icon),
         const SizedBox(height: 24),
         Text(
@@ -302,7 +306,7 @@ class PhoneCountry {
     dialCode: '+91',
     maxLength: 10,
     groups: [5, 5],
-    example: '98765 43210',
+    example: '9830393093',
   );
 
   final String name;
@@ -549,6 +553,9 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
                 border: InputBorder.none,
                 isCollapsed: true,
                 hintText: widget.country.example,
+                hintStyle: TextStyle(
+                  color: Color(0xE8E8E8CD),
+                ),
               ),
               maxLines: 1,
             ),
@@ -1033,15 +1040,20 @@ class SplashBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [palette.splashTop, palette.splashBottom],
+    return SizedBox.expand(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [palette.splashTop, palette.splashBottom],
+          ),
+        ),
+        child: CustomPaint(
+          painter: DotPatternPainter(),
+          child: SizedBox.expand(child: child),
         ),
       ),
-      child: CustomPaint(painter: DotPatternPainter(), child: child),
     );
   }
 }

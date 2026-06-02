@@ -3,27 +3,54 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:qadam_food_seller/features/auth/data/device_identity.dart';
 import 'package:qadam_food_seller/features/auth/data/seller_auth_api.dart';
 import 'package:qadam_food_seller/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('starts on the FoodHub splash screen', (tester) async {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('starts on the QadamFoodHub seller splash screen', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const FoodHubSellerApp(
         authApi: _FakeSellerAuthApi(),
         deviceIdentityProvider: _FakeDeviceIdentityProvider(),
       ),
     );
+    await tester.pump();
 
-    expect(find.text('FoodHub Seller'), findsOneWidget);
+    expect(find.text('QadamFoodHub Seller'), findsOneWidget);
     expect(find.text('Manage your restaurant on the go'), findsOneWidget);
-    expect(find.text('POWERED BY FOODHUB'), findsOneWidget);
   });
 
-  testWidgets('moves through phone, otp, and credentials auth steps', (
+  testWidgets('moves through onboarding, phone, otp, and credentials auth steps', (
     tester,
   ) async {
-    await tester.pumpWidget(const FoodHubSellerApp());
+    await tester.pumpWidget(
+      const FoodHubSellerApp(
+        authApi: _FakeSellerAuthApi(),
+        deviceIdentityProvider: _FakeDeviceIdentityProvider(),
+      ),
+    );
+    await tester.pump();
 
-    await tester.tap(find.text('FoodHub Seller'));
+    await tester.tap(find.text('QadamFoodHub Seller'));
+    await tester.pumpAndSettle();
+    expect(find.text('Set up your restaurant'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Manage every order'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Grow with clear insights'), findsOneWidget);
+    expect(find.text('Get Started'), findsOneWidget);
+
+    await tester.tap(find.text('Get Started'));
     await tester.pumpAndSettle();
     expect(find.text('Get Started'), findsOneWidget);
     expect(find.text('Send OTP'), findsOneWidget);
@@ -51,6 +78,9 @@ void main() {
     expect(find.text('Verify OTP'), findsOneWidget);
 
     final otpFields = find.byType(TextField);
+    await tester.enterText(otpFields.at(0), '2');
+    await tester.enterText(otpFields.at(1), '9');
+    await tester.enterText(otpFields.at(2), '6');
     await tester.enterText(otpFields.at(3), '1');
     await tester.enterText(otpFields.at(4), '2');
     await tester.enterText(otpFields.at(5), '3');
@@ -90,13 +120,63 @@ class _FakeSellerAuthApi implements SellerAuthApi {
   const _FakeSellerAuthApi();
 
   @override
-  Future<SellerAuthResult> sendOtp(SellerOtpRequest request) async {
-    return const SellerAuthResult(message: 'OTP sent');
+  Future<SellerSendOtpResponse> sendOtp(SellerOtpRequest request) async {
+    return const SellerSendOtpResponse(message: 'OTP sent', otp: '296587');
   }
 
   @override
-  Future<SellerAuthResult> verifyOtp(VerifySellerOtpRequest request) async {
-    return const SellerAuthResult(message: 'OTP verified');
+  Future<SellerVerifyOtpResponse> verifyOtp(VerifySellerOtpRequest request) async {
+    return const SellerVerifyOtpResponse(
+      message: 'OTP verified',
+      token: 'test-token',
+      tokenType: 'Bearer',
+      isNewSeller: true,
+      requiresRestaurantDetails: true,
+    );
+  }
+
+  @override
+  Future<SellerAuthResult> submitMailAddress(
+    SellerMailAddressRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return const SellerAuthResult(message: 'Credentials saved');
+  }
+
+  @override
+  Future<SellerVerificationSessionResponse> createVerificationSession({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return const SellerVerificationSessionResponse(
+      message: 'Session created',
+      sessionUrl: 'https://verify.didit.me/en/session/test',
+      sessionId: 'test-session-id',
+      sessionToken: 'test-sdk-token',
+    );
+  }
+
+  @override
+  Future<SellerProfile> fetchProfile({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return const SellerProfile(
+      id: 2,
+      ownerFullName: '',
+      phoneNumber: '',
+      email: '',
+    );
+  }
+
+  @override
+  Future<SellerAuthResult> submitRestaurant(
+    SellerRestaurantRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return const SellerAuthResult(message: 'Restaurant saved');
   }
 }
 
