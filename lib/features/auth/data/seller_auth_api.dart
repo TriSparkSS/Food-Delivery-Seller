@@ -110,6 +110,9 @@ class SellerRestaurantRequest {
     this.deliveryRadius,
     this.openingHours,
     this.closingHours,
+    this.profilePhotoPath,
+    this.restaurantLogoPath,
+    this.coverImagePath,
   });
 
   final String? ownerFullName;
@@ -129,6 +132,9 @@ class SellerRestaurantRequest {
   final double? deliveryRadius;
   final String? openingHours;
   final String? closingHours;
+  final String? profilePhotoPath;
+  final String? restaurantLogoPath;
+  final String? coverImagePath;
 
   Map<String, String> toMultipartFields() {
     final fields = <String, String>{
@@ -158,6 +164,21 @@ class SellerRestaurantRequest {
     put('closing_hours', closingHours);
 
     return fields;
+  }
+
+  Map<String, String> toMultipartFiles() {
+    final files = <String, String>{};
+
+    void put(String key, String? path) {
+      final cleanPath = path?.trim();
+      if (cleanPath != null && cleanPath.isNotEmpty) files[key] = cleanPath;
+    }
+
+    put('profile_photo', profilePhotoPath);
+    put('restaurant_logo', restaurantLogoPath);
+    put('cover_image', coverImagePath);
+
+    return files;
   }
 }
 
@@ -200,6 +221,9 @@ class SellerVerifyOtpResponse {
     required this.tokenType,
     required this.isNewSeller,
     required this.requiresRestaurantDetails,
+    this.hasData = false,
+    this.skipCredentialAndVerification = false,
+    this.profile,
   });
 
   final String message;
@@ -207,9 +231,35 @@ class SellerVerifyOtpResponse {
   final String tokenType;
   final bool isNewSeller;
   final bool requiresRestaurantDetails;
+  final bool hasData;
+  final bool skipCredentialAndVerification;
+  final SellerProfile? profile;
+
+  bool get shouldOpenProfileAfterOtp {
+    return skipCredentialAndVerification || profile?.canOpenProfileAfterOtp == true;
+  }
 
   factory SellerVerifyOtpResponse.fromJson(Map<String, Object?> json) {
     final data = _mapFrom(json['data']);
+    final seller = _mapFrom(data['seller']);
+    final latestVerification = _mapFrom(seller['latest_verification']);
+    final decisionPayload = _mapFrom(latestVerification['decision_payload']);
+    SellerProfile? profile;
+    if (seller.isNotEmpty || data.isNotEmpty) {
+      try {
+        profile = SellerProfile.fromSellerMap(
+          seller.isNotEmpty ? seller : data,
+          includeDocumentSearch: false,
+        );
+      } catch (_) {
+        profile = null;
+      }
+    }
+    final hasCompletedOrReviewVerification = [
+      _stringFrom(seller['verification_status']),
+      _stringFrom(latestVerification['status']),
+      _stringFrom(decisionPayload['status']),
+    ].any(_isProfileReadyVerificationStatus);
 
     return SellerVerifyOtpResponse(
       message: _stringFrom(json['message']) ?? 'Seller logged in successfully',
@@ -217,6 +267,10 @@ class SellerVerifyOtpResponse {
       tokenType: _stringFrom(data['token_type']) ?? 'Bearer',
       isNewSeller: data['is_new_seller'] == true,
       requiresRestaurantDetails: data['requires_restaurant_details'] == true,
+      hasData: data.isNotEmpty,
+      skipCredentialAndVerification:
+          data.isNotEmpty && hasCompletedOrReviewVerification,
+      profile: profile,
     );
   }
 }
@@ -305,6 +359,17 @@ class SellerProfile {
         current == 'verified';
   }
 
+  bool get isVerificationInReview {
+    final status = _normalizedVerificationStatus;
+    return status == 'in_review' ||
+        status == 'review' ||
+        status == 'under_review';
+  }
+
+  bool get canOpenProfileAfterOtp {
+    return isVerificationInReview || isVerificationApproved;
+  }
+
   bool get isVerificationFailed {
     final status = _normalizedVerificationStatus;
     return status == 'failed' ||
@@ -333,7 +398,7 @@ class SellerProfile {
 
   String get _normalizedVerificationStatus {
     final rawStatus = latestVerificationStatus ?? verificationStatus ?? status;
-    return rawStatus?.trim().toLowerCase().replaceAll(' ', '_') ?? '';
+    return rawStatus?.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_') ?? '';
   }
 
   String get initials {
@@ -346,6 +411,13 @@ class SellerProfile {
   factory SellerProfile.fromJson(Map<String, Object?> json) {
     final data = _mapFrom(json['data']);
     final seller = data.containsKey('seller') ? _mapFrom(data['seller']) : data;
+    return SellerProfile.fromSellerMap(seller);
+  }
+
+  factory SellerProfile.fromSellerMap(
+    Map<String, Object?> seller, {
+    bool includeDocumentSearch = true,
+  }) {
     final restaurant = _mapFrom(seller['restaurant']);
     final latestVerification = _mapFrom(seller['latest_verification']);
     final decisionPayload = _mapFrom(latestVerification['decision_payload']);
@@ -354,11 +426,18 @@ class SellerProfile {
     return SellerProfile(
       id: _intFrom(seller['id']),
       ownerFullName: _stringFrom(seller['owner_full_name']),
-      dateOfBirth: _dateOfBirthFromProfile(
-        seller: seller,
-        latestVerification: latestVerification,
-        decisionPayload: decisionPayload,
-      ),
+      dateOfBirth: includeDocumentSearch
+          ? _dateOfBirthFromProfile(
+              seller: seller,
+              latestVerification: latestVerification,
+              decisionPayload: decisionPayload,
+            )
+          : _firstStringFromKeys(seller, const [
+              'date_of_birth',
+              'dob',
+              'birth_date',
+              'birthday',
+            ]),
       phoneNumber: _stringFrom(seller['phone_number']),
       email: _stringFrom(seller['email']),
       profilePhoto: _stringFrom(seller['profile_photo']),
@@ -368,12 +447,14 @@ class SellerProfile {
       latestVerificationStatus:
           _stringFrom(latestVerification['status']) ??
           _stringFrom(decisionPayload['status']),
-      documentImages: SellerDocumentImages.fromResponse(
-        seller: seller,
-        documents: documents,
-        latestVerification: latestVerification,
-        decisionPayload: decisionPayload,
-      ),
+      documentImages: includeDocumentSearch
+          ? SellerDocumentImages.fromResponse(
+              seller: seller,
+              documents: documents,
+              latestVerification: latestVerification,
+              decisionPayload: decisionPayload,
+            )
+          : const SellerDocumentImages(),
       restaurant: restaurant.isEmpty
           ? null
           : SellerRestaurantProfile.fromJson(restaurant),
@@ -543,7 +624,11 @@ class NetworkSellerAuthApi implements SellerAuthApi {
 
   @override
   Future<SellerVerifyOtpResponse> verifyOtp(VerifySellerOtpRequest request) async {
-    final result = await _post(verifyOtpPath, request.toJson());
+    final result = await _post(
+      verifyOtpPath,
+      request.toJson(),
+      allowClosedConnectionSuccess: true,
+    );
     return SellerVerifyOtpResponse.fromJson(result.data ?? const {});
   }
 
@@ -594,6 +679,7 @@ class NetworkSellerAuthApi implements SellerAuthApi {
     return _postMultipart(
       restaurantPath,
       request.toMultipartFields(),
+      files: request.toMultipartFiles(),
       bearerToken: token,
       tokenType: tokenType,
     );
@@ -664,7 +750,6 @@ class NetworkSellerAuthApi implements SellerAuthApi {
       request.headers.contentType = ContentType.json;
       request.headers.set(HttpHeaders.acceptHeader, ContentType.json.value);
       request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
-      request.headers.set(HttpHeaders.connectionHeader, 'close');
       if (bearerToken != null && bearerToken.trim().isNotEmpty) {
         request.headers.set(
           HttpHeaders.authorizationHeader,
@@ -676,7 +761,7 @@ class NetworkSellerAuthApi implements SellerAuthApi {
       final response = await request.close().timeout(
         const Duration(seconds: 30),
       );
-      return _readResponse(
+      return await _readResponse(
         response,
         allowClosedConnectionSuccess: allowClosedConnectionSuccess,
       );
@@ -703,6 +788,7 @@ class NetworkSellerAuthApi implements SellerAuthApi {
   Future<SellerAuthResult> _postMultipart(
     String path,
     Map<String, String> fields, {
+    Map<String, String> files = const {},
     required String bearerToken,
     String tokenType = 'Bearer',
   }) async {
@@ -732,8 +818,26 @@ class NetworkSellerAuthApi implements SellerAuthApi {
           ..write(entry.value)
           ..write('\r\n');
       }
-      body.write('--$boundary--\r\n');
       request.add(utf8.encode(body.toString()));
+
+      for (final entry in files.entries) {
+        final file = File(entry.value);
+        if (!await file.exists()) continue;
+
+        final fileName = entry.value.split(Platform.pathSeparator).last;
+        final contentType = _contentTypeForFile(fileName);
+        request.add(
+          utf8.encode(
+            '--$boundary\r\n'
+            'Content-Disposition: form-data; name="${entry.key}"; filename="$fileName"\r\n'
+            'Content-Type: $contentType\r\n\r\n',
+          ),
+        );
+        request.add(await file.readAsBytes());
+        request.add(utf8.encode('\r\n'));
+      }
+
+      request.add(utf8.encode('--$boundary--\r\n'));
 
       return _readResponse(await request.close().timeout(const Duration(seconds: 30)));
     } on SellerAuthException {
@@ -757,11 +861,11 @@ class NetworkSellerAuthApi implements SellerAuthApi {
     try {
       body = await utf8.decoder.bind(response).join();
     } on HttpException catch (error) {
-      if (allowClosedConnectionSuccess &&
-          response.statusCode >= 200 &&
-          response.statusCode < 300 &&
-          _isClosedConnectionError(error)) {
-        return const SellerAuthResult(message: 'Request completed successfully');
+      if (allowClosedConnectionSuccess && _isClosedConnectionError(error)) {
+        return const SellerAuthResult(
+          message: 'Request completed successfully',
+          data: {'data': <String, Object?>{}},
+        );
       }
       rethrow;
     }
@@ -791,6 +895,13 @@ class NetworkSellerAuthApi implements SellerAuthApi {
         : baseUrl;
     final cleanPath = path.startsWith('/') ? path : '/$path';
     return Uri.parse('$cleanBase$cleanPath');
+  }
+
+  String _contentTypeForFile(String fileName) {
+    final lowerName = fileName.toLowerCase();
+    if (lowerName.endsWith('.png')) return 'image/png';
+    if (lowerName.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
   }
 
   Map<String, Object?> _decodeBody(String body) {
@@ -845,6 +956,14 @@ String? _stringFrom(Object? value) {
   final text = value?.toString().trim();
   if (text == null || text.isEmpty) return null;
   return text;
+}
+
+bool _isProfileReadyVerificationStatus(String? value) {
+  final status = value
+      ?.trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s_-]+'), '');
+  return status == 'inreview' || status == 'approved' || status == 'verified';
 }
 
 String? _documentUrlFromItems(List<Object?> documents, {required bool front}) {

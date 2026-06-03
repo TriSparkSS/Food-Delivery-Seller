@@ -59,6 +59,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   String? _authToken;
   String _authTokenType = 'Bearer';
   String? _sentOtp;
+  String? _otpApiPhoneNumber;
   SellerProfile? _profile;
   Timer? _splashTimer;
   final _tokenStorage = const SellerAuthTokenStorage();
@@ -176,6 +177,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   void _sendOtpFrom(AuthStep sourceStep, {String? otp}) {
     _otpSourceStep = sourceStep;
     _sentOtp = otp;
+    _otpApiPhoneNumber = _apiPhoneNumber;
     _goTo(AuthStep.otp);
   }
 
@@ -230,8 +232,8 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   Future<bool> _resendOtp() async {
     if (_sendingOtp) return false;
 
-    final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
-    if (digits.isEmpty) {
+    final phoneNumber = _otpApiPhoneNumber ?? _apiPhoneNumber;
+    if (phoneNumber.trim().isEmpty) {
       _showErrorMessage('Enter your phone number');
       return false;
     }
@@ -241,7 +243,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       final deviceIdentity = await widget.deviceIdentityProvider.load();
       final result = await widget.authApi.sendOtp(
         SellerOtpRequest(
-          phoneNumber: _apiPhoneNumber,
+          phoneNumber: phoneNumber,
           deviceIdentity: deviceIdentity,
         ),
       );
@@ -275,7 +277,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       final deviceIdentity = await widget.deviceIdentityProvider.load();
       final result = await widget.authApi.verifyOtp(
         VerifySellerOtpRequest(
-          phoneNumber: _apiPhoneNumber,
+          phoneNumber: _otpApiPhoneNumber ?? _apiPhoneNumber,
           deviceIdentity: deviceIdentity,
           otp: _otpCode,
         ),
@@ -291,11 +293,29 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
         _authTokenType = result.tokenType;
       }
       _showInfoMessage(result.message);
+      if (result.hasData || result.shouldOpenProfileAfterOtp) {
+        final profile = result.profile ?? const SellerProfile();
+        setState(() {
+          _profile = profile;
+          _step = AuthStep.profile;
+          _verifyingOtp = false;
+        });
+        return;
+      }
+
       _goTo(AuthStep.credentials);
     } on SellerAuthException catch (error) {
       if (mounted) _showErrorMessage(error.message);
+    } catch (error) {
+      final message = error.toString().toLowerCase();
+      if (mounted &&
+          message.contains('connection closed while receiving data')) {
+        _goTo(AuthStep.credentials);
+        return;
+      }
+      if (mounted) _showErrorMessage('OTP verify failed: $error');
     } finally {
-      if (mounted) setState(() => _verifyingOtp = false);
+      if (mounted && _verifyingOtp) setState(() => _verifyingOtp = false);
     }
   }
 

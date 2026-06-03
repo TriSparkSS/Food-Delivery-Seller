@@ -128,7 +128,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       _setStatus(error.message);
       _showMessage(error.message);
     } catch (error) {
-      const message = 'Unable to fetch profile. Please try again.';
+      final message = 'Unable to fetch profile: $error';
       _setStatus(message);
       _showMessage(message);
     } finally {

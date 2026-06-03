@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>We need camera access to add your restaurant images.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need photo library access to add your restaurant images.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to set your restaurant map position.</string>
 </dict>
 </plist>

@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../theme/app_theme.dart';
 import '../data/seller_auth_api.dart';
@@ -30,8 +34,10 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _imagePicker = ImagePicker();
   PhoneCountry _phoneCountry = PhoneCountry.india;
   SellerProfile? _profile;
+  XFile? _pickedProfileImage;
   DateTime? _dateOfBirth;
   bool _loadingProfile = false;
 
@@ -117,7 +123,8 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
 
   Future<void> _pickDateOfBirth() async {
     final now = DateTime.now();
-    final initialDate = _dateOfBirth ?? DateTime(now.year - 18, now.month, now.day);
+    final initialDate =
+        _dateOfBirth ?? DateTime(now.year - 18, now.month, now.day);
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -131,6 +138,128 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
     }
   }
 
+  Future<void> _showProfileImageSourceSheet() async {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: palette.screen,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: palette.fieldBorder,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _ImageSourceTile(
+                  icon: Icons.photo_library_outlined,
+                  title: 'Choose from Gallery',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickProfileImage(ImageSource.gallery);
+                  },
+                ),
+                const SizedBox(height: 10),
+                _ImageSourceTile(
+                  icon: Icons.photo_camera_outlined,
+                  title: 'Take Photo',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickProfileImage(ImageSource.camera);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickProfileImage(ImageSource source) async {
+    try {
+      final hasPermission = await _ensureImagePermission(source);
+      if (!hasPermission) return;
+
+      final pickedImage = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 82,
+        maxWidth: 1200,
+      );
+      if (pickedImage == null || !mounted) return;
+      setState(() => _pickedProfileImage = pickedImage);
+    } on MissingPluginException {
+      if (mounted) {
+        _showMessage('Please rebuild the app after adding image picker.');
+      }
+    } on PlatformException catch (error) {
+      if (mounted) {
+        _showMessage(error.message ?? 'Unable to pick profile image.');
+      }
+    } catch (_) {
+      if (mounted) _showMessage('Unable to pick profile image.');
+    }
+  }
+
+  Future<bool> _ensureImagePermission(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      return _requestPermission(
+        Permission.camera,
+        deniedMessage: 'Camera permission is required.',
+      );
+    }
+
+    if (Platform.isIOS) {
+      return _requestPermission(
+        Permission.photos,
+        deniedMessage: 'Photo library permission is required.',
+      );
+    }
+
+    final photosStatus = await Permission.photos.request();
+    if (photosStatus.isGranted || photosStatus.isLimited) return true;
+
+    final storageStatus = await Permission.storage.request();
+    if (storageStatus.isGranted || storageStatus.isLimited) return true;
+
+    if (photosStatus.isPermanentlyDenied || storageStatus.isPermanentlyDenied) {
+      _showMessage('Gallery permission is denied. Enable it from settings.');
+      await openAppSettings();
+      return false;
+    }
+
+    _showMessage('Gallery permission is required.');
+    return false;
+  }
+
+  Future<bool> _requestPermission(
+    Permission permission, {
+    required String deniedMessage,
+  }) async {
+    final status = await permission.request();
+    if (status.isGranted || status.isLimited) return true;
+
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      _showMessage('$deniedMessage Enable it from settings.');
+      await openAppSettings();
+      return false;
+    }
+
+    _showMessage(deniedMessage);
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
@@ -138,6 +267,7 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
     final documentImages =
         profile?.documentImages ?? const SellerDocumentImages();
     final profileImageUrl = _publicImageUrl(profile?.profilePhoto);
+    final pickedProfileImagePath = _pickedProfileImage?.path;
     final initials = profile?.initials ?? 'S';
 
     return Scaffold(
@@ -196,7 +326,9 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                   const SizedBox(height: 16),
                   _SellerProfileImage(
                     imageUrl: profileImageUrl,
+                    localImagePath: pickedProfileImagePath,
                     initials: initials,
+                    onTap: _showProfileImageSourceSheet,
                   ),
                   if (_loadingProfile) ...[
                     const SizedBox(height: 18),
@@ -320,40 +452,131 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
 }
 
 class _SellerProfileImage extends StatelessWidget {
-  const _SellerProfileImage({required this.imageUrl, required this.initials});
+  const _SellerProfileImage({
+    required this.imageUrl,
+    required this.localImagePath,
+    required this.initials,
+    required this.onTap,
+  });
 
   final String? imageUrl;
+  final String? localImagePath;
   final String initials;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+    final localPath = localImagePath;
+
+    return Center(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 104,
+              height: 104,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: palette.green, width: 2.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: palette.green.withValues(alpha: 0.16),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: localPath != null
+                  ? Image.file(File(localPath), fit: BoxFit.cover)
+                  : imageUrl == null
+                      ? _ProfileInitials(initials: initials)
+                      : Image.network(
+                          imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _ProfileInitials(initials: initials);
+                          },
+                        ),
+            ),
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: palette.green,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: palette.screen, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: palette.green.withValues(alpha: 0.28),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.camera_alt_rounded,
+                  color: Colors.white,
+                  size: 17,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageSourceTile extends StatelessWidget {
+  const _ImageSourceTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
 
-    return Center(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        width: 104,
-        height: 104,
-        clipBehavior: Clip.antiAlias,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: palette.green, width: 2.2),
-          boxShadow: [
-            BoxShadow(
-              color: palette.green.withValues(alpha: 0.16),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+          color: palette.fieldFill,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.fieldBorder, width: 1.1),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: palette.greenDark, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 15,
+                  height: 1.25,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+              ),
             ),
           ],
         ),
-        child: imageUrl == null
-            ? _ProfileInitials(initials: initials)
-            : Image.network(
-                imageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _ProfileInitials(initials: initials);
-                },
-              ),
       ),
     );
   }
@@ -477,7 +700,6 @@ class _PhoneProfileField extends StatelessWidget {
             controller: controller,
             country: country,
             onCountryChanged: onCountryChanged,
-            readOnly: true,
             compact: true,
           ),
         ],
@@ -641,7 +863,7 @@ class _DocumentImagePlaceholder extends StatelessWidget {
   }
 }
 
-class _EditableProfileField extends StatelessWidget {
+class _EditableProfileField extends StatefulWidget {
   const _EditableProfileField({
     required this.icon,
     required this.label,
@@ -661,6 +883,37 @@ class _EditableProfileField extends StatelessWidget {
   final int maxLines;
 
   @override
+  State<_EditableProfileField> createState() => _EditableProfileFieldState();
+}
+
+class _EditableProfileFieldState extends State<_EditableProfileField> {
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_refresh)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  void _requestFocus() {
+    if (!_focusNode.hasFocus) {
+      _focusNode.requestFocus();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
 
@@ -669,52 +922,62 @@ class _EditableProfileField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProfileSectionLabel(icon: icon, label: label),
+          _ProfileSectionLabel(icon: widget.icon, label: widget.label),
           const SizedBox(height: 8),
-          Container(
-            constraints: const BoxConstraints(minHeight: 46),
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-            decoration: BoxDecoration(
-              color: palette.fieldFill,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: palette.fieldBorder, width: 1.1),
-            ),
-            child: Row(
-              crossAxisAlignment: maxLines > 1
-                  ? CrossAxisAlignment.start
-                  : CrossAxisAlignment.center,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(top: maxLines > 1 ? 2 : 0),
-                  child: _ProfileFieldIcon(icon: icon),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _requestFocus,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 46),
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+              decoration: BoxDecoration(
+                color: palette.fieldFill,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _focusNode.hasFocus
+                      ? palette.green
+                      : palette.fieldBorder,
+                  width: _focusNode.hasFocus ? 1.4 : 1.1,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    keyboardType: keyboardType,
-                    minLines: minLines,
-                    maxLines: maxLines,
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 14,
-                      height: 1.25,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0,
-                    ),
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      isCollapsed: true,
-                      hintText: hintText,
-                      hintStyle: TextStyle(
-                        color: palette.mutedText.withValues(alpha: 0.62),
+              ),
+              child: Row(
+                crossAxisAlignment: widget.maxLines > 1
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(top: widget.maxLines > 1 ? 2 : 0),
+                    child: _ProfileFieldIcon(icon: widget.icon),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: widget.controller,
+                      focusNode: _focusNode,
+                      keyboardType: widget.keyboardType,
+                      minLines: widget.minLines,
+                      maxLines: widget.maxLines,
+                      style: TextStyle(
+                        color: palette.text,
                         fontSize: 14,
+                        height: 1.25,
                         fontWeight: FontWeight.w400,
+                        letterSpacing: 0,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        isCollapsed: true,
+                        hintText: widget.hintText,
+                        hintStyle: TextStyle(
+                          color: palette.mutedText.withValues(alpha: 0.62),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
