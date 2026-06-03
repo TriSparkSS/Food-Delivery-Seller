@@ -15,6 +15,7 @@ import 'phone_auth_screen.dart';
 import 'profile_review_screen.dart';
 import 'splash_auth_screen.dart';
 import 'verification_screen.dart';
+import '../../seller/screens/seller_dashboard_screen.dart';
 
 enum AuthStep { splash, onboarding, phone, signup, otp, credentials, verification, profile }
 
@@ -59,6 +60,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   String? _authToken;
   String _authTokenType = 'Bearer';
   String? _sentOtp;
+  String? _verificationStatusMessage;
   SellerProfile? _profile;
   Timer? _splashTimer;
   final _tokenStorage = const SellerAuthTokenStorage();
@@ -139,6 +141,32 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   void _finishOnboarding() {
     _onboardingComplete = true;
     _goTo(AuthStep.phone);
+  }
+
+  void _handleLoggedOut() {
+    _splashTimer?.cancel();
+    _phoneController.clear();
+    _emailController.clear();
+    for (final controller in _otpControllers) {
+      controller.clear();
+    }
+    _passwordController.clear();
+    _confirmPasswordController.clear();
+    setState(() {
+      _authToken = null;
+      _authTokenType = 'Bearer';
+      _sentOtp = null;
+      _verificationStatusMessage = null;
+      _profile = null;
+      _selectedCountry = PhoneCountry.india;
+      _hidePassword = true;
+      _confirmPassword = true;
+      _sendingOtp = false;
+      _verifyingOtp = false;
+      _submittingCredentials = false;
+      _onboardingComplete = true;
+      _step = AuthStep.phone;
+    });
   }
 
   void _scheduleSplashAutoAdvance() {
@@ -291,12 +319,47 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
         _authTokenType = result.tokenType;
       }
       _showInfoMessage(result.message);
+
+      if (!result.isNewSeller) {
+        _verificationStatusMessage = null;
+        _profile = null;
+        _openDashboard();
+        return;
+      }
+
+      if (result.isVerificationFailed) {
+        final statusMessage = 'Didit status: ${result.verificationStatusLabel}';
+        _verificationStatusMessage = statusMessage;
+        _showInfoMessage(statusMessage);
+        _goTo(AuthStep.verification);
+        return;
+      }
+
+      _verificationStatusMessage = null;
+      if (result.isVerificationInReview || result.isVerificationApproved) {
+        _profile = null;
+        _goTo(AuthStep.profile);
+        return;
+      }
+
       _goTo(AuthStep.credentials);
     } on SellerAuthException catch (error) {
       if (mounted) _showErrorMessage(error.message);
     } finally {
       if (mounted) setState(() => _verifyingOtp = false);
     }
+  }
+
+  void _openDashboard() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => SellerDashboardScreen(
+          authApi: widget.authApi,
+          tokenStorage: _tokenStorage,
+          onLoggedOut: _handleLoggedOut,
+        ),
+      ),
+    );
   }
 
   void _selectPhoneCountry(PhoneCountry country) {
@@ -511,12 +574,14 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
               AuthStep.verification => VerificationScreen(
                 authApi: widget.authApi,
                 tokenStorage: _tokenStorage,
+                initialStatus: _verificationStatusMessage,
                 onProfileLoaded: _openProfile,
               ),
               AuthStep.profile => ProfileReviewScreen(
                 profile: _profile,
                 authApi: widget.authApi,
                 tokenStorage: _tokenStorage,
+                onLoggedOut: _handleLoggedOut,
               ),
             },
           ),

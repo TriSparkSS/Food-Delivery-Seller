@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../theme/app_theme.dart';
+import '../data/profile_image_picker.dart';
 import '../data/seller_auth_api.dart';
 import '../data/seller_auth_token_storage.dart';
 import '../widgets/auth_components.dart';
@@ -13,6 +16,7 @@ class ProfileReviewScreen extends StatefulWidget {
     required this.tokenStorage,
     this.profile,
     this.onBack,
+    this.onLoggedOut,
     super.key,
   });
 
@@ -20,6 +24,7 @@ class ProfileReviewScreen extends StatefulWidget {
   final SellerAuthTokenStorage tokenStorage;
   final SellerProfile? profile;
   final VoidCallback? onBack;
+  final VoidCallback? onLoggedOut;
 
   @override
   State<ProfileReviewScreen> createState() => _ProfileReviewScreenState();
@@ -30,10 +35,14 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _imagePicker = const ProfileImagePicker();
   PhoneCountry _phoneCountry = PhoneCountry.india;
   SellerProfile? _profile;
   DateTime? _dateOfBirth;
+  String? _selectedProfilePhotoPath;
   bool _loadingProfile = false;
+  bool _savingProfile = false;
+  bool _pickingProfileImage = false;
 
   @override
   void initState() {
@@ -131,6 +140,113 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
     }
   }
 
+  Future<void> _pickProfilePhoto() async {
+    if (_pickingProfileImage) return;
+
+    setState(() => _pickingProfileImage = true);
+    try {
+      final path = await _imagePicker.pickProfileImage();
+      if (path != null && mounted) {
+        setState(() => _selectedProfilePhotoPath = path);
+      }
+    } on PlatformException catch (error) {
+      if (mounted) {
+        _showMessage(error.message ?? 'Unable to pick profile photo.');
+      }
+    } finally {
+      if (mounted) setState(() => _pickingProfileImage = false);
+    }
+  }
+
+  Future<void> _submitProfile() async {
+    if (_savingProfile || _loadingProfile) return;
+
+    final fullName = _fullNameController.text.trim();
+    final email = _emailController.text.trim();
+    final address = _addressController.text.trim();
+    final dateOfBirth = _dateOfBirth;
+
+    if (fullName.isEmpty) {
+      _showMessage('Enter full name');
+      return;
+    }
+    if (!_isValidEmail(email)) {
+      _showMessage('Enter a valid email address');
+      return;
+    }
+    if (address.isEmpty) {
+      _showMessage('Enter address');
+      return;
+    }
+    if (dateOfBirth == null) {
+      _showMessage('Select date of birth');
+      return;
+    }
+
+    final token = await widget.tokenStorage.loadToken();
+    final tokenType = await widget.tokenStorage.loadTokenType();
+
+    if (token == null || token.trim().isEmpty) {
+      _showMessage('Authentication failed. Login again.');
+      return;
+    }
+
+    setState(() => _savingProfile = true);
+    try {
+      final updatedProfile = await widget.authApi.updateProfile(
+        SellerProfileUpdateRequest(
+          name: fullName,
+          ownerFullName: fullName,
+          phoneNumber: _profilePhoneNumber,
+          email: email,
+          address: address,
+          dateOfBirth: _formatApiDate(dateOfBirth),
+          profilePhotoPath: _selectedProfilePhotoPath,
+        ),
+        token: token,
+        tokenType: tokenType,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _profile = updatedProfile;
+        _selectedProfilePhotoPath = null;
+        _applyProfile(updatedProfile);
+      });
+      _showMessage('Seller profile updated successfully.');
+      _openStoreDetails(updatedProfile);
+    } on SellerAuthException catch (error) {
+      if (mounted) _showMessage(error.message);
+    } catch (error) {
+      if (mounted) _showMessage('Unable to update profile. Please try again.');
+    } finally {
+      if (mounted) setState(() => _savingProfile = false);
+    }
+  }
+
+  String get _profilePhoneNumber {
+    final existingPhone = _profile?.phoneNumber ?? widget.profile?.phoneNumber;
+    if (existingPhone != null && existingPhone.trim().isNotEmpty) {
+      return existingPhone.replaceAll(RegExp(r'\s+'), '');
+    }
+
+    final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    return '${_phoneCountry.dialCode}$digits';
+  }
+
+  void _openStoreDetails(SellerProfile? profile) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => StoreDetailsScreen(
+          authApi: widget.authApi,
+          tokenStorage: widget.tokenStorage,
+          profile: profile,
+          onLoggedOut: widget.onLoggedOut,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
@@ -138,7 +254,6 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
     final documentImages =
         profile?.documentImages ?? const SellerDocumentImages();
     final profileImageUrl = _publicImageUrl(profile?.profilePhoto);
-    final initials = profile?.initials ?? 'S';
 
     return Scaffold(
       backgroundColor: palette.screen,
@@ -196,7 +311,9 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                   const SizedBox(height: 16),
                   _SellerProfileImage(
                     imageUrl: profileImageUrl,
-                    initials: initials,
+                    localImagePath: _selectedProfilePhotoPath,
+                    loading: _pickingProfileImage,
+                    onTap: _pickProfilePhoto,
                   ),
                   if (_loadingProfile) ...[
                     const SizedBox(height: 18),
@@ -258,40 +375,41 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                   SizedBox(
                     height: 52,
                     child: FilledButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (context) => StoreDetailsScreen(
-                              authApi: widget.authApi,
-                              tokenStorage: widget.tokenStorage,
-                              profile: profile,
-                            ),
-                          ),
-                        );
-                      },
+                      onPressed: _savingProfile ? null : _submitProfile,
                       style: FilledButton.styleFrom(
                         backgroundColor: palette.green,
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor:
+                            palette.green.withValues(alpha: 0.55),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Confirm & Continue',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0,
+                      child: _savingProfile
+                          ? const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.3,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Save & Continue',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Icon(Icons.arrow_forward_rounded, size: 17),
+                              ],
                             ),
-                          ),
-                          SizedBox(width: 8),
-                          Icon(Icons.arrow_forward_rounded, size: 17),
-                        ],
-                      ),
                     ),
                   ),
                 ],
@@ -320,69 +438,128 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
 }
 
 class _SellerProfileImage extends StatelessWidget {
-  const _SellerProfileImage({required this.imageUrl, required this.initials});
+  const _SellerProfileImage({
+    required this.imageUrl,
+    required this.localImagePath,
+    required this.loading,
+    required this.onTap,
+  });
 
   final String? imageUrl;
-  final String initials;
+  final String? localImagePath;
+  final bool loading;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Center(
-      child: Container(
-        width: 104,
-        height: 104,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: palette.green, width: 2.2),
-          boxShadow: [
-            BoxShadow(
-              color: palette.green.withValues(alpha: 0.16),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+      child: GestureDetector(
+        onTap: loading ? null : onTap,
+        child: Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            Container(
+              width: 90,
+              height: 90,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: palette.green,
+                shape: BoxShape.circle,
+              ),
+              child: CircleAvatar(
+                radius: 42,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                child: ClipOval(
+                  child: _ProfileImageContent(
+                    imageUrl: imageUrl,
+                    localImagePath: localImagePath,
+                    colorScheme: colorScheme,
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                color: palette.green,
+                shape: BoxShape.circle,
+                border: Border.all(color: palette.screen, width: 2),
+              ),
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: palette.green,
+                child: loading
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.photo_camera_outlined,
+                        size: 15,
+                        color: Colors.white,
+                      ),
+              ),
             ),
           ],
         ),
-        child: imageUrl == null
-            ? _ProfileInitials(initials: initials)
-            : Image.network(
-                imageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _ProfileInitials(initials: initials);
-                },
-              ),
       ),
     );
   }
 }
 
-class _ProfileInitials extends StatelessWidget {
-  const _ProfileInitials({required this.initials});
+class _ProfileImageContent extends StatelessWidget {
+  const _ProfileImageContent({
+    required this.imageUrl,
+    required this.localImagePath,
+    required this.colorScheme,
+  });
 
-  final String initials;
+  final String? imageUrl;
+  final String? localImagePath;
+  final ColorScheme colorScheme;
 
   @override
   Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AuthPalette>()!;
+    final localPath = localImagePath;
+    if (localPath != null && localPath.isNotEmpty) {
+      return Image.file(
+        File(localPath),
+        width: 84,
+        height: 84,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            Icons.person,
+            size: 36,
+            color: colorScheme.onSurfaceVariant,
+          );
+        },
+      );
+    }
 
-    return Center(
-      child: ColoredBox(
-        color: palette.greenDark,
-        child: Center(
-          child: Text(
-            initials,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 30,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-            ),
-          ),
-        ),
-      ),
+    final remoteUrl = imageUrl;
+    if (remoteUrl == null || remoteUrl.isEmpty) {
+      return Icon(Icons.person, size: 36, color: colorScheme.onSurfaceVariant);
+    }
+
+    return Image.network(
+      remoteUrl,
+      width: 84,
+      height: 84,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(
+          Icons.person,
+          size: 36,
+          color: colorScheme.onSurfaceVariant,
+        );
+      },
     );
   }
 }
@@ -589,6 +766,23 @@ class _DocumentImageCard extends StatelessWidget {
                   ),
                 ),
               ),
+              Align(
+                alignment: Alignment.topRight,
+                child: Container(
+                  margin: const EdgeInsets.all(8),
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: palette.text.withValues(alpha: 0.72),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_rounded,
+                    color: Colors.white,
+                    size: 13,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -735,8 +929,6 @@ class _ProfileSectionLabel extends StatelessWidget {
 
     return Row(
       children: [
-        Icon(icon, size: 15, color: palette.mutedText),
-        const SizedBox(width: 7),
         Text(
           label,
           style: TextStyle(
@@ -844,6 +1036,16 @@ String _formatDate(DateTime? date) {
 
   return '${date.day.toString().padLeft(2, '0')} '
       '${months[date.month - 1]} ${date.year}';
+}
+
+String _formatApiDate(DateTime date) {
+  return '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+}
+
+bool _isValidEmail(String value) {
+  return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value);
 }
 
 String? _publicImageUrl(String? url) {

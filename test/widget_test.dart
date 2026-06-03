@@ -181,12 +181,87 @@ class _FakeSellerAuthApi implements SellerAuthApi {
   }
 
   @override
+  Future<SellerVerificationStatusResponse> fetchVerificationStatus({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return const SellerVerificationStatusResponse(
+      message: 'Verification status fetched',
+      status: 'in_review',
+    );
+  }
+
+  @override
+  Future<List<SellerCuisine>> fetchCuisines({
+    required String token,
+    String tokenType = 'Bearer',
+    int perPage = 15,
+  }) async {
+    return const [
+      SellerCuisine(id: 1, translatedName: 'Indian'),
+      SellerCuisine(id: 2, translatedName: 'Russian'),
+    ];
+  }
+
+  @override
+  Future<SellerProfile> updateProfile(
+    SellerProfileUpdateRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return SellerProfile(
+      ownerFullName: request.ownerFullName,
+      phoneNumber: request.phoneNumber,
+      email: request.email,
+      address: request.address,
+      dateOfBirth: request.dateOfBirth,
+    );
+  }
+
+  @override
+  Future<SellerRestaurantProfile> fetchRestaurant({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return const SellerRestaurantProfile(
+      restaurantName: 'Spice Garden',
+      restaurantPhone: '+919876543210',
+      restaurantEmail: 'store@example.com',
+      restaurantAddress: 'Main market',
+      city: 'Delhi',
+      cuisineType: 'Indian',
+      foodType: 'both',
+      minimumOrderAmount: 150,
+      averagePreparationTime: 25,
+      deliveryRadius: 5,
+      openingHours: '09:00',
+      closingHours: '23:00',
+    );
+  }
+
+  @override
   Future<SellerAuthResult> submitRestaurant(
     SellerRestaurantRequest request, {
     required String token,
     String tokenType = 'Bearer',
   }) async {
     return const SellerAuthResult(message: 'Restaurant saved');
+  }
+
+  @override
+  Future<SellerAuthResult> logout({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return const SellerAuthResult(message: 'Logged out');
+  }
+
+  @override
+  Future<SellerAuthResult> deleteAccount({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    return const SellerAuthResult(message: 'Account deleted');
   }
 }
 

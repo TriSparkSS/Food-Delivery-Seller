@@ -57,9 +57,7 @@ class SellerRegistrationStatusResponse {
   final String message;
   final bool isRegistered;
 
-  factory SellerRegistrationStatusResponse.fromJson(
-    Map<String, Object?> json,
-  ) {
+  factory SellerRegistrationStatusResponse.fromJson(Map<String, Object?> json) {
     final data = _mapFrom(json['data']);
 
     return SellerRegistrationStatusResponse(
@@ -91,6 +89,56 @@ class SellerMailAddressRequest {
   }
 }
 
+class SellerProfileUpdateRequest {
+  const SellerProfileUpdateRequest({
+    required this.name,
+    required this.ownerFullName,
+    required this.phoneNumber,
+    required this.email,
+    required this.address,
+    required this.dateOfBirth,
+    this.password,
+    this.passwordConfirmation,
+    this.profilePhotoPath,
+  });
+
+  final String name;
+  final String ownerFullName;
+  final String phoneNumber;
+  final String email;
+  final String address;
+  final String dateOfBirth;
+  final String? password;
+  final String? passwordConfirmation;
+  final String? profilePhotoPath;
+
+  Map<String, String> toMultipartFields() {
+    final fields = <String, String>{};
+
+    void put(String key, String value) {
+      final text = value.trim();
+      if (text.isNotEmpty) fields[key] = text;
+    }
+
+    put('name', name);
+    put('owner_full_name', ownerFullName);
+    put('phone_number', phoneNumber);
+    put('email', email);
+    put('address', address);
+    put('dob', dateOfBirth);
+    put('password', password ?? '');
+    put('password_confirmation', passwordConfirmation ?? '');
+
+    return fields;
+  }
+
+  Map<String, String> toMultipartFiles() {
+    final photoPath = profilePhotoPath?.trim();
+    if (photoPath == null || photoPath.isEmpty) return const {};
+    return {'profile_photo': photoPath};
+  }
+}
+
 class SellerRestaurantRequest {
   const SellerRestaurantRequest({
     this.ownerFullName,
@@ -110,6 +158,8 @@ class SellerRestaurantRequest {
     this.deliveryRadius,
     this.openingHours,
     this.closingHours,
+    this.coverImagePath,
+    this.logoImagePath,
   });
 
   final String? ownerFullName;
@@ -129,6 +179,8 @@ class SellerRestaurantRequest {
   final double? deliveryRadius;
   final String? openingHours;
   final String? closingHours;
+  final String? coverImagePath;
+  final String? logoImagePath;
 
   Map<String, String> toMultipartFields() {
     final fields = <String, String>{
@@ -159,6 +211,20 @@ class SellerRestaurantRequest {
 
     return fields;
   }
+
+  Map<String, String> toMultipartFiles() {
+    final files = <String, String>{};
+
+    void put(String key, String? value) {
+      final path = value?.trim();
+      if (path != null && path.isNotEmpty) files[key] = path;
+    }
+
+    put('cover_image', coverImagePath);
+    put('restaurant_logo', logoImagePath);
+
+    return files;
+  }
 }
 
 class SellerAuthResult {
@@ -166,6 +232,39 @@ class SellerAuthResult {
 
   final String message;
   final Map<String, Object?>? data;
+}
+
+class SellerCuisine {
+  const SellerCuisine({required this.id, required this.translatedName});
+
+  final int? id;
+  final String translatedName;
+
+  factory SellerCuisine.fromJson(Map<String, Object?> json) {
+    final name = _mapFrom(json['name']);
+    final id = _intFrom(json['id']);
+
+    return SellerCuisine(
+      id: id,
+      translatedName:
+          _stringFrom(json['translated_name']) ??
+          _stringFrom(name['en']) ??
+          _stringFrom(name['ru']) ??
+          _stringFrom(name['tg']) ??
+          (id == null ? 'Cuisine' : 'Cuisine $id'),
+    );
+  }
+
+  static List<SellerCuisine> listFromJson(Map<String, Object?> json) {
+    final data = _mapFrom(json['data']);
+    final rawItems = _listFrom(data['items']);
+
+    return rawItems
+        .map(_mapFrom)
+        .where((item) => item.isNotEmpty)
+        .map(SellerCuisine.fromJson)
+        .toList(growable: false);
+  }
 }
 
 class SellerSendOtpResponse {
@@ -200,6 +299,7 @@ class SellerVerifyOtpResponse {
     required this.tokenType,
     required this.isNewSeller,
     required this.requiresRestaurantDetails,
+    this.verificationStatus,
   });
 
   final String message;
@@ -207,6 +307,45 @@ class SellerVerifyOtpResponse {
   final String tokenType;
   final bool isNewSeller;
   final bool requiresRestaurantDetails;
+  final String? verificationStatus;
+
+  bool get isVerificationApproved {
+    final status = _normalizedVerificationStatus;
+    return status == 'approved' || status == 'verified';
+  }
+
+  bool get isVerificationInReview {
+    final status = _normalizedVerificationStatus;
+    return status == 'in_review' || status == 'under_review';
+  }
+
+  bool get isVerificationFailed {
+    final status = _normalizedVerificationStatus;
+    return status == 'failed' ||
+        status == 'rejected' ||
+        status == 'declined' ||
+        status == 'denied' ||
+        status == 'expired' ||
+        status == 'cancelled' ||
+        status == 'canceled';
+  }
+
+  String get verificationStatusLabel {
+    final status = verificationStatus?.trim().replaceAll('_', ' ') ?? '';
+    if (status.isEmpty) return 'Pending Review';
+
+    return status
+        .split(RegExp(r'\s+'))
+        .map((word) {
+          if (word.isEmpty) return word;
+          return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+        })
+        .join(' ');
+  }
+
+  String get _normalizedVerificationStatus {
+    return verificationStatus?.trim().toLowerCase().replaceAll(' ', '_') ?? '';
+  }
 
   factory SellerVerifyOtpResponse.fromJson(Map<String, Object?> json) {
     final data = _mapFrom(json['data']);
@@ -217,6 +356,7 @@ class SellerVerifyOtpResponse {
       tokenType: _stringFrom(data['token_type']) ?? 'Bearer',
       isNewSeller: data['is_new_seller'] == true,
       requiresRestaurantDetails: data['requires_restaurant_details'] == true,
+      verificationStatus: _stringFrom(data['verification_status']),
     );
   }
 }
@@ -236,7 +376,9 @@ class SellerVerificationSessionResponse {
   final String sessionToken;
   final String sdkToken;
 
-  factory SellerVerificationSessionResponse.fromJson(Map<String, Object?> json) {
+  factory SellerVerificationSessionResponse.fromJson(
+    Map<String, Object?> json,
+  ) {
     final data = _mapFrom(json['data']);
     final decisionPayload = _mapFrom(data['decision_payload']);
     final sessionUrl =
@@ -264,6 +406,188 @@ class SellerVerificationSessionResponse {
       sessionToken: sessionToken ?? '',
       sdkToken: sdkToken ?? '',
     );
+  }
+}
+
+class SellerVerificationStatusResponse {
+  const SellerVerificationStatusResponse({
+    required this.message,
+    this.status,
+    this.submittedAt,
+    this.faceMatch,
+    this.livenessCheck,
+  });
+
+  final String message;
+  final String? status;
+  final DateTime? submittedAt;
+  final SellerVerificationCheck? faceMatch;
+  final SellerVerificationCheck? livenessCheck;
+
+  String get normalizedStatus => _normalizeVerificationStatusValue(status);
+
+  String get statusLabel => _verificationStatusLabelFrom(status);
+
+  bool get isApproved {
+    final value = normalizedStatus;
+    return value == 'approved' || value == 'verified';
+  }
+
+  bool get isInReview {
+    final value = normalizedStatus;
+    return value.isEmpty ||
+        value == 'in_review' ||
+        value == 'under_review' ||
+        value == 'pending' ||
+        value == 'pending_review';
+  }
+
+  bool get isFailed {
+    final value = normalizedStatus;
+    return value == 'failed' ||
+        value == 'rejected' ||
+        value == 'declined' ||
+        value == 'denied' ||
+        value == 'expired' ||
+        value == 'cancelled' ||
+        value == 'canceled';
+  }
+
+  String get displayMessage {
+    if (isApproved) {
+      return 'Your restaurant is verified';
+    }
+    if (isInReview) {
+      return 'Your verification is under review';
+    }
+    if (isFailed) {
+      return warningSummary ?? 'Verification needs attention';
+    }
+    return message;
+  }
+
+  String? get warningSummary => faceMatch?.warning ?? livenessCheck?.warning;
+
+  factory SellerVerificationStatusResponse.fromJson(Map<String, Object?> json) {
+    final data = _mapFrom(json['data']);
+    final verification = _mapFrom(data['verification']);
+    final latestVerification = _mapFrom(data['latest_verification']);
+    final decisionPayload = _mapFrom(latestVerification['decision_payload']);
+    final source = verification.isEmpty ? data : verification;
+    final faceMatches = _listFrom(source['face_matches']);
+    final livenessChecks = _listFrom(source['liveness_checks']);
+
+    return SellerVerificationStatusResponse(
+      message: _stringFrom(json['message']) ?? 'Verification status fetched.',
+      status:
+          _stringFrom(source['status']) ??
+          _stringFrom(data['verification_status']) ??
+          _stringFrom(data['status']) ??
+          _stringFrom(latestVerification['status']) ??
+          _stringFrom(decisionPayload['status']) ??
+          _stringFrom(json['verification_status']) ??
+          _stringFrom(json['status']),
+      submittedAt: _dateTimeFrom(source['submitted_at']),
+      faceMatch: SellerVerificationCheck.fromList(faceMatches),
+      livenessCheck: SellerVerificationCheck.fromList(livenessChecks),
+    );
+  }
+}
+
+class SellerVerificationCheck {
+  const SellerVerificationCheck({this.score, this.status, this.warning});
+
+  final double? score;
+  final String? status;
+  final String? warning;
+
+  String get normalizedStatus => _normalizeVerificationStatusValue(status);
+
+  String get statusLabel => _verificationStatusLabelFrom(status);
+
+  bool get isApproved {
+    final value = normalizedStatus;
+    return value == 'approved' || value == 'verified' || value == 'passed';
+  }
+
+  bool get isInReview {
+    final value = normalizedStatus;
+    return value.isEmpty ||
+        value == 'in_review' ||
+        value == 'under_review' ||
+        value == 'pending' ||
+        value == 'pending_review';
+  }
+
+  bool get isFailed {
+    final value = normalizedStatus;
+    return value == 'failed' ||
+        value == 'rejected' ||
+        value == 'declined' ||
+        value == 'denied' ||
+        value == 'expired' ||
+        value == 'cancelled' ||
+        value == 'canceled';
+  }
+
+  String get scoreLabel {
+    final value = score;
+    if (value == null) {
+      return isApproved ? '✓' : '-';
+    }
+    final formatted = value.toStringAsFixed(1);
+    return formatted.endsWith('.0')
+        ? formatted.substring(0, formatted.length - 2)
+        : formatted;
+  }
+
+  String get subtitle {
+    final warningText = warning?.trim();
+    if (warningText != null && warningText.isNotEmpty) {
+      return warningText;
+    }
+    if (isApproved) {
+      return '$statusLabel - Passed';
+    }
+    if (isInReview) {
+      return '$statusLabel - Manual review pending';
+    }
+    if (isFailed) {
+      return '$statusLabel - Needs attention';
+    }
+    return statusLabel;
+  }
+
+  factory SellerVerificationCheck.fromJson(Map<String, Object?> json) {
+    return SellerVerificationCheck(
+      score: _doubleFrom(json['score']),
+      status: _stringFrom(json['status']),
+      warning: _warningFrom(_listFrom(json['warnings'])),
+    );
+  }
+
+  static SellerVerificationCheck? fromList(List<Object?> items) {
+    if (items.isEmpty) {
+      return null;
+    }
+    final first = _mapFrom(items.first);
+    if (first.isEmpty) {
+      return null;
+    }
+    return SellerVerificationCheck.fromJson(first);
+  }
+
+  static String? _warningFrom(List<Object?> warnings) {
+    for (final item in warnings) {
+      final warning = _mapFrom(item);
+      final text =
+          _stringFrom(warning['short_description']) ??
+          _stringFrom(warning['long_description']);
+      if (text != null && text.trim().isNotEmpty) {
+        return text.trim();
+      }
+    }
+    return null;
   }
 }
 
@@ -415,6 +739,8 @@ class SellerDocumentImages {
 class SellerRestaurantProfile {
   const SellerRestaurantProfile({
     this.restaurantName,
+    this.restaurantLogo,
+    this.coverImage,
     this.restaurantPhone,
     this.restaurantEmail,
     this.restaurantAddress,
@@ -431,6 +757,8 @@ class SellerRestaurantProfile {
   });
 
   final String? restaurantName;
+  final String? restaurantLogo;
+  final String? coverImage;
   final String? restaurantPhone;
   final String? restaurantEmail;
   final String? restaurantAddress;
@@ -448,9 +776,23 @@ class SellerRestaurantProfile {
   factory SellerRestaurantProfile.fromJson(Map<String, Object?> json) {
     return SellerRestaurantProfile(
       restaurantName: _stringFrom(json['restaurant_name'] ?? json['name']),
+      restaurantLogo: _firstImageUrlFromKeys(json, const [
+        'restaurant_logo',
+        'restaurant_logo_url',
+        'logo',
+        'logo_url',
+      ]),
+      coverImage: _firstImageUrlFromKeys(json, const [
+        'cover_image',
+        'cover_image_url',
+        'cover_photo',
+        'cover_photo_url',
+      ]),
       restaurantPhone: _stringFrom(json['restaurant_phone'] ?? json['phone']),
       restaurantEmail: _stringFrom(json['restaurant_email'] ?? json['email']),
-      restaurantAddress: _stringFrom(json['restaurant_address'] ?? json['address']),
+      restaurantAddress: _stringFrom(
+        json['restaurant_address'] ?? json['address'],
+      ),
       city: _stringFrom(json['city']),
       latitude: _doubleFrom(json['latitude']),
       longitude: _doubleFrom(json['longitude']),
@@ -462,6 +804,18 @@ class SellerRestaurantProfile {
       openingHours: _stringFrom(json['opening_hours']),
       closingHours: _stringFrom(json['closing_hours']),
     );
+  }
+
+  factory SellerRestaurantProfile.fromApiJson(Map<String, Object?> json) {
+    final data = _mapFrom(json['data']);
+    final restaurant = _mapFrom(data['restaurant']);
+    final source = restaurant.isNotEmpty
+        ? restaurant
+        : data.isNotEmpty
+        ? data
+        : json;
+
+    return SellerRestaurantProfile.fromJson(source);
   }
 }
 
@@ -494,13 +848,45 @@ abstract class SellerAuthApi {
     String tokenType = 'Bearer',
   });
 
+  Future<SellerVerificationStatusResponse> fetchVerificationStatus({
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
   Future<SellerProfile> fetchProfile({
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
+  Future<List<SellerCuisine>> fetchCuisines({
+    required String token,
+    String tokenType = 'Bearer',
+    int perPage = 15,
+  });
+
+  Future<SellerProfile> updateProfile(
+    SellerProfileUpdateRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
+  Future<SellerRestaurantProfile> fetchRestaurant({
     required String token,
     String tokenType = 'Bearer',
   });
 
   Future<SellerAuthResult> submitRestaurant(
     SellerRestaurantRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
+  Future<SellerAuthResult> logout({
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
+  Future<SellerAuthResult> deleteAccount({
     required String token,
     String tokenType = 'Bearer',
   });
@@ -514,8 +900,13 @@ class NetworkSellerAuthApi implements SellerAuthApi {
     this.verifyOtpPath = '/auth/otp/verify',
     this.mailAddressPath = '/auth/mail-address',
     this.verificationSessionPath = '/auth/verification/session',
+    this.verificationStatusPath = '/auth/verification/status',
     this.mePath = 'https://restro.devhimanshu.com/api/v1/seller/auth/me',
+    this.profileUpdatePath = '/auth/me/update',
+    this.cuisinesPath = '/auth/cuisines',
     this.restaurantPath = '/auth/restaurant',
+    this.logoutPath = '/auth/logout',
+    this.deleteAccountPath = '/delete/account',
   });
 
   final String baseUrl;
@@ -524,8 +915,13 @@ class NetworkSellerAuthApi implements SellerAuthApi {
   final String verifyOtpPath;
   final String mailAddressPath;
   final String verificationSessionPath;
+  final String verificationStatusPath;
   final String mePath;
+  final String profileUpdatePath;
+  final String cuisinesPath;
   final String restaurantPath;
+  final String logoutPath;
+  final String deleteAccountPath;
 
   @override
   Future<SellerRegistrationStatusResponse> isRegistered(
@@ -542,7 +938,9 @@ class NetworkSellerAuthApi implements SellerAuthApi {
   }
 
   @override
-  Future<SellerVerifyOtpResponse> verifyOtp(VerifySellerOtpRequest request) async {
+  Future<SellerVerifyOtpResponse> verifyOtp(
+    VerifySellerOtpRequest request,
+  ) async {
     final result = await _post(verifyOtpPath, request.toJson());
     return SellerVerifyOtpResponse.fromJson(result.data ?? const {});
   }
@@ -577,12 +975,68 @@ class NetworkSellerAuthApi implements SellerAuthApi {
   }
 
   @override
+  Future<SellerVerificationStatusResponse> fetchVerificationStatus({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    final result = await _get(
+      verificationStatusPath,
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+    return SellerVerificationStatusResponse.fromJson(result.data ?? const {});
+  }
+
+  @override
   Future<SellerProfile> fetchProfile({
     required String token,
     String tokenType = 'Bearer',
   }) async {
     final result = await _get(mePath, bearerToken: token, tokenType: tokenType);
     return SellerProfile.fromJson(result.data ?? const {});
+  }
+
+  @override
+  Future<List<SellerCuisine>> fetchCuisines({
+    required String token,
+    String tokenType = 'Bearer',
+    int perPage = 15,
+  }) async {
+    final result = await _get(
+      '$cuisinesPath?per_page=$perPage',
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+    return SellerCuisine.listFromJson(result.data ?? const {});
+  }
+
+  @override
+  Future<SellerProfile> updateProfile(
+    SellerProfileUpdateRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    final result = await _postMultipart(
+      profileUpdatePath,
+      request.toMultipartFields(),
+      files: request.toMultipartFiles(),
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+    return SellerProfile.fromJson(result.data ?? const {});
+  }
+
+  @override
+  Future<SellerRestaurantProfile> fetchRestaurant({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    final result = await _get(
+      restaurantPath,
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+    return SellerRestaurantProfile.fromApiJson(result.data ?? const {});
   }
 
   @override
@@ -594,8 +1048,37 @@ class NetworkSellerAuthApi implements SellerAuthApi {
     return _postMultipart(
       restaurantPath,
       request.toMultipartFields(),
+      files: request.toMultipartFiles(),
       bearerToken: token,
       tokenType: tokenType,
+    );
+  }
+
+  @override
+  Future<SellerAuthResult> logout({
+    required String token,
+    String tokenType = 'Bearer',
+  }) {
+    return _post(
+      logoutPath,
+      const {},
+      bearerToken: token,
+      tokenType: tokenType,
+      allowClosedConnectionSuccess: true,
+    );
+  }
+
+  @override
+  Future<SellerAuthResult> deleteAccount({
+    required String token,
+    String tokenType = 'Bearer',
+  }) {
+    return _post(
+      deleteAccountPath,
+      const {},
+      bearerToken: token,
+      tokenType: tokenType,
+      allowClosedConnectionSuccess: true,
     );
   }
 
@@ -630,7 +1113,9 @@ class NetworkSellerAuthApi implements SellerAuthApi {
       } on TimeoutException {
         throw const SellerAuthException('Request timed out. Please try again.');
       } on SocketException {
-        throw const SellerAuthException('Network error. Check your connection.');
+        throw const SellerAuthException(
+          'Network error. Check your connection.',
+        );
       } on HttpException catch (error) {
         if (attempt == 0 && _isClosedConnectionError(error)) continue;
         throw const SellerAuthException(
@@ -688,7 +1173,9 @@ class NetworkSellerAuthApi implements SellerAuthApi {
       throw const SellerAuthException('Network error. Check your connection.');
     } on HttpException catch (error) {
       if (allowClosedConnectionSuccess && _isClosedConnectionError(error)) {
-        return const SellerAuthResult(message: 'Request completed successfully');
+        return const SellerAuthResult(
+          message: 'Request completed successfully',
+        );
       }
       throw const SellerAuthException(
         'Server closed the request. Please try again.',
@@ -703,12 +1190,14 @@ class NetworkSellerAuthApi implements SellerAuthApi {
   Future<SellerAuthResult> _postMultipart(
     String path,
     Map<String, String> fields, {
+    Map<String, String> files = const {},
     required String bearerToken,
     String tokenType = 'Bearer',
   }) async {
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 20);
-    final boundary = '----qadamFoodSeller${DateTime.now().microsecondsSinceEpoch}';
+    final boundary =
+        '----qadamFoodSeller${DateTime.now().microsecondsSinceEpoch}';
 
     try {
       final request = await client
@@ -724,18 +1213,42 @@ class NetworkSellerAuthApi implements SellerAuthApi {
         'multipart/form-data; boundary=$boundary',
       );
 
-      final body = StringBuffer();
-      for (final entry in fields.entries) {
-        body
-          ..write('--$boundary\r\n')
-          ..write('Content-Disposition: form-data; name="${entry.key}"\r\n\r\n')
-          ..write(entry.value)
-          ..write('\r\n');
+      void addText(String value) {
+        request.add(utf8.encode(value));
       }
-      body.write('--$boundary--\r\n');
-      request.add(utf8.encode(body.toString()));
 
-      return _readResponse(await request.close().timeout(const Duration(seconds: 30)));
+      for (final entry in fields.entries) {
+        addText('--$boundary\r\n');
+        addText('Content-Disposition: form-data; name="${entry.key}"\r\n\r\n');
+        addText(entry.value);
+        addText('\r\n');
+      }
+      for (final entry in files.entries) {
+        final file = File(entry.value);
+        if (!file.existsSync()) continue;
+        final maxBytes = _maxMultipartFileBytes(entry.key);
+        final fileBytes = await file.length();
+        if (maxBytes != null && fileBytes > maxBytes) {
+          throw SellerAuthException(
+            '${_multipartFileLabel(entry.key)} is too large. Please choose a smaller image.',
+          );
+        }
+        final filename = file.uri.pathSegments.isNotEmpty
+            ? file.uri.pathSegments.last
+            : 'upload.jpg';
+        addText('--$boundary\r\n');
+        addText(
+          'Content-Disposition: form-data; name="${entry.key}"; filename="$filename"\r\n',
+        );
+        addText('Content-Type: image/jpeg\r\n\r\n');
+        request.add(await file.readAsBytes());
+        addText('\r\n');
+      }
+      addText('--$boundary--\r\n');
+
+      return _readResponse(
+        await request.close().timeout(const Duration(seconds: 30)),
+      );
     } on SellerAuthException {
       rethrow;
     } on TimeoutException {
@@ -747,6 +1260,23 @@ class NetworkSellerAuthApi implements SellerAuthApi {
     } finally {
       client.close(force: true);
     }
+  }
+
+  int? _maxMultipartFileBytes(String fieldName) {
+    return switch (fieldName) {
+      'cover_image' => 8 * 1024 * 1024,
+      'restaurant_logo' || 'profile_photo' => 5 * 1024 * 1024,
+      _ => null,
+    };
+  }
+
+  String _multipartFileLabel(String fieldName) {
+    return switch (fieldName) {
+      'cover_image' => 'Cover image',
+      'restaurant_logo' => 'Restaurant logo',
+      'profile_photo' => 'Profile photo',
+      _ => 'Selected image',
+    };
   }
 
   Future<SellerAuthResult> _readResponse(
@@ -761,7 +1291,9 @@ class NetworkSellerAuthApi implements SellerAuthApi {
           response.statusCode >= 200 &&
           response.statusCode < 300 &&
           _isClosedConnectionError(error)) {
-        return const SellerAuthResult(message: 'Request completed successfully');
+        return const SellerAuthResult(
+          message: 'Request completed successfully',
+        );
       }
       rethrow;
     }
@@ -845,6 +1377,29 @@ String? _stringFrom(Object? value) {
   final text = value?.toString().trim();
   if (text == null || text.isEmpty) return null;
   return text;
+}
+
+String _normalizeVerificationStatusValue(String? value) {
+  return value?.trim().toLowerCase().replaceAll(' ', '_') ?? '';
+}
+
+String _verificationStatusLabelFrom(String? value) {
+  final normalized = value?.trim().replaceAll('_', ' ') ?? '';
+  if (normalized.isEmpty) return 'Pending Review';
+
+  return normalized
+      .split(RegExp(r'\s+'))
+      .map((word) {
+        if (word.isEmpty) return word;
+        return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+      })
+      .join(' ');
+}
+
+DateTime? _dateTimeFrom(Object? value) {
+  final text = _stringFrom(value);
+  if (text == null) return null;
+  return DateTime.tryParse(text);
 }
 
 String? _documentUrlFromItems(List<Object?> documents, {required bool front}) {
@@ -989,6 +1544,29 @@ String? _firstStringFromKeys(Map<String, Object?> map, List<String> keys) {
   }
 
   return null;
+}
+
+String? _firstImageUrlFromKeys(Map<String, Object?> map, List<String> keys) {
+  for (final key in keys) {
+    final value = map[key];
+    if (value is Map || value is List) {
+      final nested = _findStringByKeys(value, const [
+        'url',
+        'file_url',
+        'image_url',
+        'media_url',
+        'path',
+        'file_path',
+      ]);
+      if (nested != null) return nested;
+      continue;
+    }
+
+    final text = _stringFrom(value);
+    if (text != null) return text;
+  }
+
+  return _findStringByKeys(map, keys);
 }
 
 int? _intFrom(Object? value) {

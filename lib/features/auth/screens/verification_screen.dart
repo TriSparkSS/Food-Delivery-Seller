@@ -10,12 +10,14 @@ class VerificationScreen extends StatefulWidget {
     required this.authApi,
     required this.onProfileLoaded,
     this.tokenStorage = const SellerAuthTokenStorage(),
+    this.initialStatus,
     super.key,
   });
 
   final SellerAuthApi authApi;
   final SellerAuthTokenStorage tokenStorage;
   final ValueChanged<SellerProfile> onProfileLoaded;
+  final String? initialStatus;
 
   @override
   State<VerificationScreen> createState() => _VerificationScreenState();
@@ -23,15 +25,13 @@ class VerificationScreen extends StatefulWidget {
 
 class _VerificationScreenState extends State<VerificationScreen> {
   bool _isLoading = false;
-  String _status = 'Preparing identity verification';
+  late String _status;
 
-  /*@override
+  @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _verifyIdentity();
-    });
-  }*/
+    _status = widget.initialStatus ?? 'Preparing identity verification';
+  }
 
   Future<void> _verifyIdentity() async {
     if (_isLoading) return;

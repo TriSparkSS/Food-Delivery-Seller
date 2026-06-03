@@ -21,4 +21,15 @@ class SellerAuthTokenStorage {
     final preferences = await SharedPreferences.getInstance();
     return preferences.getString(_tokenTypeKey) ?? 'Bearer';
   }
+
+  Future<void> clearToken() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_tokenKey);
+    await preferences.remove(_tokenTypeKey);
+  }
+
+  Future<void> clearAll() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.clear();
+  }
 }
