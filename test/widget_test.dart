@@ -142,6 +142,8 @@ class _FakeSellerAuthApi implements SellerAuthApi {
       tokenType: 'Bearer',
       isNewSeller: true,
       requiresRestaurantDetails: true,
+      hasData: false,
+      skipCredentialAndVerification: false,
     );
   }
 

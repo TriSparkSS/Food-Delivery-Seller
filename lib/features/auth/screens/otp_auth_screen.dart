@@ -60,7 +60,8 @@ class _OtpAuthScreenState extends State<OtpAuthScreen> {
   @override
   void didUpdateWidget(covariant OtpAuthScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.phoneNumber != widget.phoneNumber) {
+    if (oldWidget.phoneNumber != widget.phoneNumber ||
+        oldWidget.otp != widget.otp) {
       _startTimer();
     }
   }
