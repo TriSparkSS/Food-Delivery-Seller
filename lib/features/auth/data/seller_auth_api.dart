@@ -298,7 +298,9 @@ class SellerVerifyOtpResponse {
     required this.token,
     required this.tokenType,
     required this.isNewSeller,
+    required this.isEmailVerified,
     required this.requiresRestaurantDetails,
+    this.status,
     this.verificationStatus,
   });
 
@@ -306,8 +308,14 @@ class SellerVerifyOtpResponse {
   final String token;
   final String tokenType;
   final bool isNewSeller;
+  final bool isEmailVerified;
   final bool requiresRestaurantDetails;
+  final String? status;
   final String? verificationStatus;
+
+  bool get isSellerOnboarding => _normalizedStatus == 'onboarding';
+
+  bool get isSellerPending => _normalizedStatus == 'pending';
 
   bool get isVerificationApproved {
     final status = _normalizedVerificationStatus;
@@ -344,7 +352,16 @@ class SellerVerifyOtpResponse {
   }
 
   String get _normalizedVerificationStatus {
-    return verificationStatus?.trim().toLowerCase().replaceAll(' ', '_') ?? '';
+    return verificationStatus
+            ?.trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'[\s-]+'), '_') ??
+        '';
+  }
+
+  String get _normalizedStatus {
+    return status?.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_') ??
+        '';
   }
 
   factory SellerVerifyOtpResponse.fromJson(Map<String, Object?> json) {
@@ -355,7 +372,9 @@ class SellerVerifyOtpResponse {
       token: _stringFrom(data['token']) ?? '',
       tokenType: _stringFrom(data['token_type']) ?? 'Bearer',
       isNewSeller: data['is_new_seller'] == true,
+      isEmailVerified: _boolFrom(data['is_email_verified']),
       requiresRestaurantDetails: data['requires_restaurant_details'] == true,
+      status: _stringFrom(data['status']),
       verificationStatus: _stringFrom(data['verification_status']),
     );
   }

@@ -14,10 +14,21 @@ import 'otp_auth_screen.dart';
 import 'phone_auth_screen.dart';
 import 'profile_review_screen.dart';
 import 'splash_auth_screen.dart';
+import 'store_details_screen.dart';
 import 'verification_screen.dart';
 import '../../seller/screens/seller_dashboard_screen.dart';
 
-enum AuthStep { splash, onboarding, phone, signup, otp, credentials, verification, profile }
+enum AuthStep {
+  splash,
+  onboarding,
+  phone,
+  signup,
+  otp,
+  credentials,
+  verification,
+  profile,
+  store,
+}
 
 class SellerAuthFlow extends StatefulWidget {
   const SellerAuthFlow({
@@ -115,26 +126,28 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   }
 
   Future<void> _loadStoredToken() async {
+    setState(() => _checkingStoredToken = false);
+    _scheduleSplashAutoAdvance();
+  }
+
+  Future<void> _finishSplash() async {
+    _splashTimer?.cancel();
     final token = await _tokenStorage.loadToken();
     final tokenType = await _tokenStorage.loadTokenType();
 
     if (!mounted) return;
     if (token != null && token.trim().isNotEmpty) {
+      final storedStatus = await _tokenStorage.loadAuthStatus();
+      if (!mounted) return;
+
       setState(() {
         _authToken = token;
         _authTokenType = tokenType;
         _checkingStoredToken = false;
-        _step = AuthStep.profile;
       });
+      _routeAfterStoredToken(storedStatus);
       return;
     }
-
-    setState(() => _checkingStoredToken = false);
-    _scheduleSplashAutoAdvance();
-  }
-
-  void _finishSplash() {
-    _splashTimer?.cancel();
     _goTo(AuthStep.onboarding);
   }
 
@@ -197,6 +210,9 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       case AuthStep.verification:
         break;
       case AuthStep.profile:
+        break;
+      case AuthStep.store:
+        _goTo(AuthStep.profile);
         break;
     }
   }
@@ -318,36 +334,75 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
         _authToken = result.token;
         _authTokenType = result.tokenType;
       }
+      await _tokenStorage.saveAuthStatus(
+        isNewSeller: result.isNewSeller,
+        isEmailVerified: result.isEmailVerified,
+        requiresRestaurantDetails: result.requiresRestaurantDetails,
+        status: result.status,
+        verificationStatus: result.verificationStatus,
+      );
       _showInfoMessage(result.message);
+      _routeAfterOtpVerification(result);
 
-      if (!result.isNewSeller) {
-        _verificationStatusMessage = null;
-        _profile = null;
-        _openDashboard();
-        return;
-      }
-
-      if (result.isVerificationFailed) {
-        final statusMessage = 'Didit status: ${result.verificationStatusLabel}';
-        _verificationStatusMessage = statusMessage;
-        _showInfoMessage(statusMessage);
-        _goTo(AuthStep.verification);
-        return;
-      }
-
-      _verificationStatusMessage = null;
-      if (result.isVerificationInReview || result.isVerificationApproved) {
-        _profile = null;
-        _goTo(AuthStep.profile);
-        return;
-      }
-
-      _goTo(AuthStep.credentials);
     } on SellerAuthException catch (error) {
       if (mounted) _showErrorMessage(error.message);
     } finally {
       if (mounted) setState(() => _verifyingOtp = false);
     }
+  }
+
+  void _routeAfterOtpVerification(SellerVerifyOtpResponse result) {
+    _profile = null;
+
+    if (!result.isNewSeller && result.isSellerOnboarding) {
+      _verificationStatusMessage = null;
+      _goTo(AuthStep.store);
+      return;
+    }
+
+    if (result.isSellerPending && result.isVerificationApproved) {
+      _verificationStatusMessage = null;
+      _openDashboard();
+      return;
+    }
+
+    if (!result.isVerificationApproved && !result.isEmailVerified) {
+      _verificationStatusMessage = null;
+      _goTo(AuthStep.credentials);
+      return;
+    }
+
+    if (!result.isVerificationApproved) {
+      final statusMessage = 'Didit status: ${result.verificationStatusLabel}';
+      _verificationStatusMessage = statusMessage;
+      _showInfoMessage(statusMessage);
+      _goTo(AuthStep.verification);
+      return;
+    }
+
+    _verificationStatusMessage = null;
+    _openDashboard();
+  }
+
+  void _routeAfterStoredToken(SellerStoredAuthStatus status) {
+    if (!status.hasSavedStatus) {
+      _verificationStatusMessage = null;
+      _openDashboard();
+      return;
+    }
+
+    _routeAfterOtpVerification(
+      SellerVerifyOtpResponse(
+        message: 'Welcome back',
+        token: _authToken ?? '',
+        tokenType: _authTokenType,
+        isNewSeller: status.isNewSeller ?? false,
+        isEmailVerified: status.isEmailVerified ?? false,
+        requiresRestaurantDetails: status.requiresRestaurantDetails ?? false,
+        status: status.status,
+        verificationStatus: status.verificationStatus,
+      ),
+    );
   }
 
   void _openDashboard() {
@@ -578,6 +633,12 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
                 onProfileLoaded: _openProfile,
               ),
               AuthStep.profile => ProfileReviewScreen(
+                profile: _profile,
+                authApi: widget.authApi,
+                tokenStorage: _tokenStorage,
+                onLoggedOut: _handleLoggedOut,
+              ),
+              AuthStep.store => StoreDetailsScreen(
                 profile: _profile,
                 authApi: widget.authApi,
                 tokenStorage: _tokenStorage,
