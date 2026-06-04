@@ -9,6 +9,7 @@ import '../data/seller_auth_api.dart';
 import '../data/seller_auth_token_storage.dart';
 import '../widgets/auth_components.dart';
 import 'credentials_auth_screen.dart';
+import 'complete_verification_screen.dart';
 import 'onboarding_auth_screen.dart';
 import 'otp_auth_screen.dart';
 import 'phone_auth_screen.dart';
@@ -28,19 +29,22 @@ enum AuthStep {
   verification,
   profile,
   store,
+  completeVerification,
 }
 
 class SellerAuthFlow extends StatefulWidget {
   const SellerAuthFlow({
     SellerAuthApi? authApi,
     DeviceIdentityProvider? deviceIdentityProvider,
+    this.startAtPhone = false,
     super.key,
   }) : authApi = authApi ?? const NetworkSellerAuthApi(),
        deviceIdentityProvider =
-           deviceIdentityProvider ?? const PlatformDeviceIdentityProvider();
+            deviceIdentityProvider ?? const PlatformDeviceIdentityProvider();
 
   final SellerAuthApi authApi;
   final DeviceIdentityProvider deviceIdentityProvider;
+  final bool startAtPhone;
 
   @override
   State<SellerAuthFlow> createState() => _SellerAuthFlowState();
@@ -94,6 +98,12 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   @override
   void initState() {
     super.initState();
+    if (widget.startAtPhone) {
+      _checkingStoredToken = false;
+      _onboardingComplete = true;
+      _step = AuthStep.phone;
+      return;
+    }
     _loadStoredToken();
   }
 
@@ -217,6 +227,8 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
         break;
       case AuthStep.store:
         _goTo(AuthStep.profile);
+        break;
+      case AuthStep.completeVerification:
         break;
     }
   }
@@ -396,13 +408,14 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   void _routeAfterApprovedVerification(SellerVerifyOtpResponse result) {
     _verificationStatusMessage = null;
 
-    if (result.requiresRestaurantDetails || result.isSellerOnboarding) {
+    if (result.requiresRestaurantDetails ||
+        _isOnboardingSellerStatus(result.status)) {
       _goTo(AuthStep.store);
       return;
     }
 
-    if (result.isSellerPending) {
-      _openDashboard();
+    if (_isPendingSellerStatus(result.status)) {
+      _goTo(AuthStep.completeVerification);
       return;
     }
 
@@ -412,33 +425,14 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   void _routeAfterStoredToken(SellerStoredAuthStatus status) {
     _profile = null;
 
-    if (!status.hasSavedStatus) {
-      _verificationStatusMessage = null;
-      _openDashboard();
-      return;
-    }
-
     final emailVerified = status.isEmailVerified == true;
     final verificationApproved = _isApprovedVerificationStatus(
       status.verificationStatus,
     );
-    final sellerStatus = _normalizeAuthRouteValue(status.status);
-
-    if (emailVerified && verificationApproved) {
-      _verificationStatusMessage = null;
-      _openDashboard();
-      return;
-    }
 
     if (!emailVerified) {
       _verificationStatusMessage = null;
       _goTo(AuthStep.credentials);
-      return;
-    }
-
-    if (sellerStatus == 'onboarding') {
-      _verificationStatusMessage = null;
-      _goTo(AuthStep.store);
       return;
     }
 
@@ -449,6 +443,18 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       return;
     }
 
+    if (_isOnboardingSellerStatus(status.status)) {
+      _verificationStatusMessage = null;
+      _goTo(AuthStep.store);
+      return;
+    }
+
+    if (_isPendingSellerStatus(status.status)) {
+      _verificationStatusMessage = null;
+      _goTo(AuthStep.completeVerification);
+      return;
+    }
+
     _verificationStatusMessage = null;
     _openDashboard();
   }
@@ -456,6 +462,19 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   bool _isApprovedVerificationStatus(String? status) {
     final value = _normalizeAuthRouteValue(status);
     return value == 'approved' || value == 'verified';
+  }
+
+  bool _isOnboardingSellerStatus(String? status) {
+    final value = _normalizeAuthRouteValue(status);
+    return value == 'onboard' || value == 'onboarding';
+  }
+
+  bool _isPendingSellerStatus(String? status) {
+    final value = _normalizeAuthRouteValue(status);
+    return value == 'pending' ||
+        value == 'pending_review' ||
+        value == 'under_review' ||
+        value == 'in_review';
   }
 
   String _normalizeAuthRouteValue(String? value) {
@@ -482,24 +501,46 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   ) async {
     final storedStatus = await _tokenStorage.loadAuthStatus();
 
-    if (!storedStatus.hasSavedStatus || storedStatus.isEmailVerified != true) {
+    if (storedStatus.isEmailVerified != true) {
       return storedStatus;
     }
+
+    var latestSellerStatus = storedStatus.status;
+    var latestVerificationStatus = storedStatus.verificationStatus;
 
     try {
       final latestStatus = await widget.authApi.fetchVerificationStatus(
         token: token,
         tokenType: tokenType,
       );
-      await _tokenStorage.saveVerificationStatus(latestStatus.status);
-      return _tokenStorage.loadAuthStatus();
-    } catch (_) {
-      return storedStatus;
-    }
+      latestVerificationStatus = latestStatus.status ?? latestVerificationStatus;
+    } catch (_) {}
+
+    try {
+      final profile = await widget.authApi.fetchProfile(
+        token: token,
+        tokenType: tokenType,
+      );
+      latestSellerStatus = profile.status ?? latestSellerStatus;
+      latestVerificationStatus =
+          profile.verificationStatus ??
+          profile.latestVerificationStatus ??
+          latestVerificationStatus;
+    } catch (_) {}
+
+    await _tokenStorage.saveAuthStatus(
+      isNewSeller: storedStatus.isNewSeller ?? false,
+      isEmailVerified: true,
+      requiresRestaurantDetails: storedStatus.requiresRestaurantDetails ?? false,
+      status: latestSellerStatus,
+      verificationStatus: latestVerificationStatus,
+    );
+
+    return _tokenStorage.loadAuthStatus();
   }
 
   void _openDashboard() {
-    Navigator.of(context).push(
+    Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (context) => SellerDashboardScreen(
           authApi: widget.authApi,
@@ -735,6 +776,12 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
                 profile: _profile,
                 authApi: widget.authApi,
                 tokenStorage: _tokenStorage,
+                onLoggedOut: _handleLoggedOut,
+              ),
+              AuthStep.completeVerification => CompleteVerificationScreen(
+                authApi: widget.authApi,
+                tokenStorage: _tokenStorage,
+                message: _verificationStatusMessage,
                 onLoggedOut: _handleLoggedOut,
               ),
             },

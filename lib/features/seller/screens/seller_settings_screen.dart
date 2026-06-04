@@ -6,6 +6,7 @@ import 'package:qadam_food_seller/features/seller/screens/seller_menu_screen.dar
 import '../../../theme/app_theme.dart';
 import '../../auth/data/seller_auth_api.dart';
 import '../../auth/data/seller_auth_token_storage.dart';
+import '../../auth/screens/auth_screen.dart';
 
 class SellerSettingsScreen extends StatefulWidget {
   const SellerSettingsScreen({
@@ -93,22 +94,25 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     if (_loggingOut) return;
 
     setState(() => _loggingOut = true);
+    var openedAuth = false;
     try {
       final token = await widget.tokenStorage.loadToken();
       final tokenType = await widget.tokenStorage.loadTokenType();
 
       if (token != null && token.trim().isNotEmpty) {
-        await widget.authApi.logout(token: token, tokenType: tokenType);
+        try {
+          await widget.authApi.logout(token: token, tokenType: tokenType);
+        } catch (_) {
+          // Local logout should still complete if the remote session is already gone.
+        }
       }
-      await widget.tokenStorage.clearToken();
+      await _clearSessionAndOpenGetStarted();
 
-      if (!mounted) return;
-      widget.onLoggedOut?.call();
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      openedAuth = true;
     } on SellerAuthException catch (error) {
       if (mounted) _showSettingsMessage(error.message, error: true);
     } finally {
-      if (mounted) setState(() => _loggingOut = false);
+      if (mounted && !openedAuth) setState(() => _loggingOut = false);
     }
   }
 
@@ -128,6 +132,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     if (_deletingAccount) return;
 
     setState(() => _deletingAccount = true);
+    var openedAuth = false;
     try {
       final token = await widget.tokenStorage.loadToken();
       final tokenType = await widget.tokenStorage.loadTokenType();
@@ -135,16 +140,29 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
       if (token != null && token.trim().isNotEmpty) {
         await widget.authApi.deleteAccount(token: token, tokenType: tokenType);
       }
-      await widget.tokenStorage.clearAll();
+      await _clearSessionAndOpenGetStarted();
 
-      if (!mounted) return;
-      widget.onLoggedOut?.call();
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      openedAuth = true;
     } on SellerAuthException catch (error) {
       if (mounted) _showSettingsMessage(error.message, error: true);
     } finally {
-      if (mounted) setState(() => _deletingAccount = false);
+      if (mounted && !openedAuth) setState(() => _deletingAccount = false);
     }
+  }
+
+  Future<void> _clearSessionAndOpenGetStarted() async {
+    await widget.tokenStorage.clearAll();
+
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (context) => SellerAuthFlow(
+          authApi: widget.authApi,
+          startAtPhone: true,
+        ),
+      ),
+      (route) => false,
+    );
   }
 
   void _showSettingsMessage(String message, {bool error = false}) {

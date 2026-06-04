@@ -408,6 +408,8 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
         tokenType: tokenType,
       );
 
+      await _saveSubmittedRestaurantStatus(result);
+
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
@@ -426,6 +428,39 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _saveSubmittedRestaurantStatus(SellerAuthResult result) async {
+    final storedStatus = await widget.tokenStorage.loadAuthStatus();
+    await widget.tokenStorage.saveAuthStatus(
+      isNewSeller: storedStatus.isNewSeller ?? true,
+      isEmailVerified: storedStatus.isEmailVerified ?? true,
+      requiresRestaurantDetails: false,
+      status: _stringFromRestaurantResult(result.data, 'status') ?? 'pending',
+      verificationStatus:
+          _stringFromRestaurantResult(result.data, 'verification_status') ??
+          storedStatus.verificationStatus ??
+          'approved',
+    );
+  }
+
+  String? _stringFromRestaurantResult(
+    Map<String, Object?>? data,
+    String key,
+  ) {
+    Object? value = data?[key];
+    if (value == null) {
+      final seller = data?['seller'];
+      if (seller is Map) value = seller[key];
+    }
+    if (value == null) {
+      final restaurant = data?['restaurant'];
+      if (restaurant is Map) value = restaurant[key];
+    }
+
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return text;
   }
 
   Future<void> _pickOpeningTime() async {
