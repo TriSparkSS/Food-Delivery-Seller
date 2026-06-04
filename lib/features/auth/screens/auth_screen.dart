@@ -68,6 +68,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   bool _submittingCredentials = false;
   bool _checkingStoredToken = true;
   bool _onboardingComplete = false;
+  bool _resumedFromStoredToken = false;
   String? _authToken;
   String _authTokenType = 'Bearer';
   String? _sentOtp;
@@ -137,13 +138,15 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
 
     if (!mounted) return;
     if (token != null && token.trim().isNotEmpty) {
-      final storedStatus = await _tokenStorage.loadAuthStatus();
+      final storedStatus = await _loadFreshStoredAuthStatus(token, tokenType);
       if (!mounted) return;
 
       setState(() {
         _authToken = token;
         _authTokenType = tokenType;
         _checkingStoredToken = false;
+        _onboardingComplete = true;
+        _resumedFromStoredToken = true;
       });
       _routeAfterStoredToken(storedStatus);
       return;
@@ -178,6 +181,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       _verifyingOtp = false;
       _submittingCredentials = false;
       _onboardingComplete = true;
+      _resumedFromStoredToken = false;
       _step = AuthStep.phone;
     });
   }
@@ -205,7 +209,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
         _goTo(_otpSourceStep);
         break;
       case AuthStep.credentials:
-        _goTo(AuthStep.otp);
+        _goTo(_resumedFromStoredToken ? AuthStep.phone : AuthStep.otp);
         break;
       case AuthStep.verification:
         break;
@@ -326,6 +330,7 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       );
 
       if (!mounted) return;
+      _resumedFromStoredToken = false;
       if (result.token.isNotEmpty) {
         await _tokenStorage.saveToken(
           token: result.token,
@@ -354,21 +359,28 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
   void _routeAfterOtpVerification(SellerVerifyOtpResponse result) {
     _profile = null;
 
-    if (!result.isNewSeller && result.isSellerOnboarding) {
-      _verificationStatusMessage = null;
-      _goTo(AuthStep.store);
-      return;
-    }
-
-    if (result.isSellerPending && result.isVerificationApproved) {
-      _verificationStatusMessage = null;
-      _openDashboard();
-      return;
-    }
-
-    if (!result.isVerificationApproved && !result.isEmailVerified) {
+    if (!result.isEmailVerified) {
       _verificationStatusMessage = null;
       _goTo(AuthStep.credentials);
+      return;
+    }
+
+    if (result.isVerificationApproved) {
+      _routeAfterApprovedVerification(result);
+      return;
+    }
+
+    if (result.isVerificationInReview) {
+      _verificationStatusMessage = null;
+      _goTo(AuthStep.profile);
+      return;
+    }
+
+    if (result.isVerificationFailed) {
+      final statusMessage = 'Didit status: ${result.verificationStatusLabel}';
+      _verificationStatusMessage = statusMessage;
+      _showInfoMessage(statusMessage);
+      _goTo(AuthStep.verification);
       return;
     }
 
@@ -379,30 +391,111 @@ class _SellerAuthFlowState extends State<SellerAuthFlow> {
       _goTo(AuthStep.verification);
       return;
     }
+  }
 
+  void _routeAfterApprovedVerification(SellerVerifyOtpResponse result) {
     _verificationStatusMessage = null;
+
+    if (result.requiresRestaurantDetails || result.isSellerOnboarding) {
+      _goTo(AuthStep.store);
+      return;
+    }
+
+    if (result.isSellerPending) {
+      _openDashboard();
+      return;
+    }
+
     _openDashboard();
   }
 
   void _routeAfterStoredToken(SellerStoredAuthStatus status) {
+    _profile = null;
+
     if (!status.hasSavedStatus) {
       _verificationStatusMessage = null;
       _openDashboard();
       return;
     }
 
-    _routeAfterOtpVerification(
-      SellerVerifyOtpResponse(
-        message: 'Welcome back',
-        token: _authToken ?? '',
-        tokenType: _authTokenType,
-        isNewSeller: status.isNewSeller ?? false,
-        isEmailVerified: status.isEmailVerified ?? false,
-        requiresRestaurantDetails: status.requiresRestaurantDetails ?? false,
-        status: status.status,
-        verificationStatus: status.verificationStatus,
-      ),
+    final emailVerified = status.isEmailVerified == true;
+    final verificationApproved = _isApprovedVerificationStatus(
+      status.verificationStatus,
     );
+    final sellerStatus = _normalizeAuthRouteValue(status.status);
+
+    if (emailVerified && verificationApproved) {
+      _verificationStatusMessage = null;
+      _openDashboard();
+      return;
+    }
+
+    if (!emailVerified) {
+      _verificationStatusMessage = null;
+      _goTo(AuthStep.credentials);
+      return;
+    }
+
+    if (sellerStatus == 'onboarding') {
+      _verificationStatusMessage = null;
+      _goTo(AuthStep.store);
+      return;
+    }
+
+    if (!verificationApproved) {
+      final label = _authRouteStatusLabel(status.verificationStatus);
+      _verificationStatusMessage = 'Didit status: $label';
+      _goTo(AuthStep.verification);
+      return;
+    }
+
+    _verificationStatusMessage = null;
+    _openDashboard();
+  }
+
+  bool _isApprovedVerificationStatus(String? status) {
+    final value = _normalizeAuthRouteValue(status);
+    return value == 'approved' || value == 'verified';
+  }
+
+  String _normalizeAuthRouteValue(String? value) {
+    return value?.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_') ??
+        '';
+  }
+
+  String _authRouteStatusLabel(String? status) {
+    final value = status?.trim().replaceAll('_', ' ') ?? '';
+    if (value.isEmpty) return 'Pending Review';
+
+    return value
+        .split(RegExp(r'\s+'))
+        .map((word) {
+          if (word.isEmpty) return word;
+          return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+        })
+        .join(' ');
+  }
+
+  Future<SellerStoredAuthStatus> _loadFreshStoredAuthStatus(
+    String token,
+    String tokenType,
+  ) async {
+    final storedStatus = await _tokenStorage.loadAuthStatus();
+
+    if (!storedStatus.hasSavedStatus || storedStatus.isEmailVerified != true) {
+      return storedStatus;
+    }
+
+    try {
+      final latestStatus = await widget.authApi.fetchVerificationStatus(
+        token: token,
+        tokenType: tokenType,
+      );
+      await _tokenStorage.saveVerificationStatus(latestStatus.status);
+      return _tokenStorage.loadAuthStatus();
+    } catch (_) {
+      return storedStatus;
+    }
   }
 
   void _openDashboard() {

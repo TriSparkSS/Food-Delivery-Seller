@@ -71,15 +71,27 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           if (_tab == SellerDashboardTab.menu)
             Positioned(
               right: 24,
-              bottom: 18,
-              child: FloatingActionButton(
-                heroTag: 'add-product',
-                elevation: 12,
-                backgroundColor: palette.greenDark,
-                foregroundColor: Colors.white,
-                shape: const CircleBorder(),
-                onPressed: _openAddProduct,
-                child: const Icon(Icons.add_rounded, size: 34),
+              bottom: MediaQuery.paddingOf(context).bottom + 96,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: palette.greenDark.withValues(alpha: 0.28),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: FloatingActionButton(
+                  heroTag: 'add-product',
+                  elevation: 0,
+                  backgroundColor: palette.greenDark,
+                  foregroundColor: Colors.white,
+                  shape: const CircleBorder(),
+                  onPressed: _openAddProduct,
+                  child: const Icon(Icons.add_rounded, size: 34),
+                ),
               ),
             ),
         ],
@@ -377,43 +389,67 @@ class SellerBottomNavigation extends StatelessWidget {
     final palette = Theme.of(context).extension<AuthPalette>()!;
     final bottom = MediaQuery.paddingOf(context).bottom;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(16, 10, 16, bottom + 8),
-      decoration: BoxDecoration(
-        color: palette.screen,
-        border: Border(top: BorderSide(color: palette.fieldBorder, width: 1)),
-      ),
-      child: Row(
-        children: [
-          _BottomNavItem(
-            tab: SellerDashboardTab.dashboard,
-            currentTab: currentTab,
-            icon: Icons.dashboard_rounded,
-            label: 'Dashboard',
-            onTap: onChanged,
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, bottom > 0 ? 8 : 14),
+        child: Container(
+          height: 70,
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: palette.fieldFill.withValues(alpha: 0.98),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: palette.fieldBorder, width: 1.1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(
+                  alpha: Theme.of(context).brightness == Brightness.dark
+                      ? 0.28
+                      : 0.09,
+                ),
+                blurRadius: 26,
+                offset: const Offset(0, 14),
+              ),
+              BoxShadow(
+                color: palette.greenDark.withValues(alpha: 0.07),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-          _BottomNavItem(
-            tab: SellerDashboardTab.orders,
-            currentTab: currentTab,
-            icon: Icons.list_alt_rounded,
-            label: 'Orders',
-            onTap: onChanged,
+          child: Row(
+            children: [
+              _BottomNavItem(
+                tab: SellerDashboardTab.dashboard,
+                currentTab: currentTab,
+                icon: Icons.dashboard_rounded,
+                label: 'Dashboard',
+                onTap: onChanged,
+              ),
+              _BottomNavItem(
+                tab: SellerDashboardTab.orders,
+                currentTab: currentTab,
+                icon: Icons.receipt_long_rounded,
+                label: 'Orders',
+                onTap: onChanged,
+              ),
+              _BottomNavItem(
+                tab: SellerDashboardTab.menu,
+                currentTab: currentTab,
+                icon: Icons.restaurant_menu_rounded,
+                label: 'Menu',
+                onTap: onChanged,
+              ),
+              _BottomNavItem(
+                tab: SellerDashboardTab.settings,
+                currentTab: currentTab,
+                icon: Icons.settings_rounded,
+                label: 'Settings',
+                onTap: onChanged,
+              ),
+            ],
           ),
-          _BottomNavItem(
-            tab: SellerDashboardTab.menu,
-            currentTab: currentTab,
-            icon: Icons.restaurant_menu_rounded,
-            label: 'Menu',
-            onTap: onChanged,
-          ),
-          _BottomNavItem(
-            tab: SellerDashboardTab.settings,
-            currentTab: currentTab,
-            icon: Icons.settings_rounded,
-            label: 'Settings',
-            onTap: onChanged,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -441,39 +477,81 @@ class _BottomNavItem extends StatelessWidget {
     final color = selected ? palette.greenDark : palette.mutedText;
 
     return Expanded(
-      child: InkWell(
-        onTap: () => onTap(tab),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 27),
-              const SizedBox(height: 5),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  height: 1,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  letterSpacing: 0,
-                ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(22),
+          child: InkWell(
+            onTap: () => onTap(tab),
+            borderRadius: BorderRadius.circular(22),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              height: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    width: selected ? 34 : 28,
+                    height: selected ? 30 : 28,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected ? palette.greenDark : Colors.transparent,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: selected
+                          ? [
+                              BoxShadow(
+                                color: palette.greenDark.withValues(
+                                  alpha: 0.24,
+                                ),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Icon(
+                      icon,
+                      color: selected ? Colors.white : color,
+                      size: selected ? 19 : 22,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      height: 1,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    width: selected ? 18 : 0,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: palette.greenDark,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: selected ? 6 : 0,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: palette.greenDark,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -568,8 +646,16 @@ class SellerSegmentedControl extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: palette.fieldFill,
-        borderRadius: BorderRadius.circular(16),
+        color: palette.fieldFill.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.fieldBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: List.generate(labels.length, (index) {
@@ -585,6 +671,15 @@ class SellerSegmentedControl extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: selected ? palette.greenDark : Colors.transparent,
                   borderRadius: BorderRadius.circular(13),
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: palette.greenDark.withValues(alpha: 0.22),
+                            blurRadius: 14,
+                            offset: const Offset(0, 7),
+                          ),
+                        ]
+                      : null,
                 ),
                 child: FittedBox(
                   fit: BoxFit.scaleDown,

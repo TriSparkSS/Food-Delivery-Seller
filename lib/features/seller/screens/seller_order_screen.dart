@@ -101,14 +101,26 @@ class _OrderCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: palette.fieldBorder, width: 1.1),
-        color: palette.fieldFill.withValues(alpha: 0.96),
+        color: palette.fieldFill.withValues(alpha: 0.97),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withValues(alpha: 0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Row(
         children: [
-          Container(width: 4, color: statusColor),
+          Container(width: 5, color: statusColor),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
@@ -130,12 +142,24 @@ class _OrderCard extends StatelessWidget {
                         ),
                       ),
                       if (minutesAgo != null)
-                        Text(
-                          '⏱ $minutesAgo',
-                          style: TextStyle(
-                            color: const Color(0xFFFF9F0A),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFFF9F0A,
+                            ).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '⏱ $minutesAgo',
+                            style: const TextStyle(
+                              color: Color(0xFFFF9F0A),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         )
                       else if (badge != null)
@@ -288,7 +312,14 @@ class _OrderActionButton extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: background.withValues(alpha: 0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 7),
+          ),
+        ],
       ),
       child: FittedBox(
         fit: BoxFit.scaleDown,

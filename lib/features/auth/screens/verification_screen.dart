@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 import '../data/seller_auth_api.dart';
 import '../data/seller_auth_token_storage.dart';
+import '../widgets/auth_components.dart';
 
 class VerificationScreen extends StatefulWidget {
   const VerificationScreen({
@@ -49,6 +50,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
         throw const SellerAuthException('Authentication failed. Login again.');
       }
 
+      if (await _routeIfVerificationAlreadySubmitted(
+        token: token,
+        tokenType: tokenType,
+      )) {
+        return;
+      }
+
       final session = await widget.authApi.createVerificationSession(
         token: token,
         tokenType: tokenType,
@@ -56,19 +64,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
       final verificationToken = session.sessionToken.isNotEmpty
           ? session.sessionToken
-          : session.sdkToken.isNotEmpty
-              ? session.sdkToken
-              : session.sessionId;
-
-      if (verificationToken.isEmpty) {
-        throw const SellerAuthException('Verification session token missing.');
-      }
+          : session.sdkToken;
 
       setState(() => _status = 'Opening identity verification');
-      final result = await DiditSdk.startVerification(
-        verificationToken,
-        config: DiditConfig(loggingEnabled: true),
-      );
+      final result = verificationToken.isNotEmpty
+          ? await DiditSdk.startVerification(
+              verificationToken,
+              config: DiditConfig(loggingEnabled: true),
+            )
+          : await _startVerificationWithWorkflow(session);
 
       switch (result) {
         case VerificationCompleted():
@@ -93,6 +97,46 @@ class _VerificationScreenState extends State<VerificationScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<VerificationResult> _startVerificationWithWorkflow(
+    SellerVerificationSessionResponse session,
+  ) async {
+    final workflowId = session.workflowId.trim();
+    if (workflowId.isEmpty) {
+      throw const SellerAuthException(
+        'Didit workflow id missing. Please try again.',
+      );
+    }
+
+    return DiditSdk.startVerificationWithWorkflow(
+      workflowId,
+      vendorData: session.sessionId.isEmpty ? null : session.sessionId,
+      config: DiditConfig(loggingEnabled: true),
+    );
+  }
+
+  Future<bool> _routeIfVerificationAlreadySubmitted({
+    required String token,
+    required String tokenType,
+  }) async {
+    final SellerVerificationStatusResponse latestStatus;
+    try {
+      latestStatus = await widget.authApi.fetchVerificationStatus(
+        token: token,
+        tokenType: tokenType,
+      );
+      await widget.tokenStorage.saveVerificationStatus(latestStatus.status);
+    } on SellerAuthException {
+      return false;
+    }
+
+    if (latestStatus.normalizedStatus.isEmpty) return false;
+    if (!latestStatus.isApproved && !latestStatus.isInReview) return false;
+
+    _setStatus(latestStatus.displayMessage);
+    await _fetchVerifiedProfile();
+    return true;
   }
 
   Future<void> _fetchVerifiedProfile() async {
@@ -156,9 +200,17 @@ class _VerificationScreenState extends State<VerificationScreen> {
     final palette = Theme.of(context).extension<AuthPalette>()!;
 
     return Scaffold(
-      backgroundColor: palette.screen,
-      body: SafeArea(
-        child: Padding(
+        backgroundColor: palette.screen,
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.screen,
+            image: const DecorationImage(
+              image: AssetImage(LightAuthTextureBackground.assetPath),
+              fit: BoxFit.cover,
+            ),
+          ),
+          child: SafeArea(
+          child: Padding(
           padding: const EdgeInsets.all(24),
           child: Center(
             child: Column(
@@ -168,7 +220,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 Icon(
                   Icons.verified_user_rounded,
                   color: palette.green,
-                  size: 78,
+                  size: 128,
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -225,6 +277,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ),
         ),
       ),
+        ),
     );
   }
 }

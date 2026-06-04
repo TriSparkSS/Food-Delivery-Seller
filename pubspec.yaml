@@ -36,8 +36,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   didit_sdk: ^3.4.3
+  flutter_map: ^8.3.0
   geolocator: ^13.0.2
   image_picker: ^1.1.2
+  latlong2: ^0.9.1
   permission_handler: ^11.3.1
   shared_preferences: ^2.3.5
 
@@ -68,6 +70,7 @@ flutter:
     - assets/images/onboarding_restaurant_setup.png
     - assets/images/onboarding_orders.png
     - assets/images/onboarding_menu_growth.png
+    - assets/images/app_logo.png
 
   fonts:
     - family: SF Pro Display

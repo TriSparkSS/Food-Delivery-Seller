@@ -145,10 +145,11 @@ class _CredentialsAuthScreenState extends State<CredentialsAuthScreen> {
             AuthHeaderBlock(
               stepIndex: 2,
               showStepIndicator: false,
-              icon: const Icon(
-                Icons.mail_outline_rounded,
+              icon: Image.asset(
+                'assets/images/app_logo.png',
                 color: Colors.white,
-                size: 38,
+                height: 150,
+                width: 150,
               ),
               title: 'Set Credentials',
               subtitle: const Text('Add your email and create a password'),

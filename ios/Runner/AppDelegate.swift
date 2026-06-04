@@ -195,6 +195,7 @@ final class ProfileImagePicker: NSObject, UIImagePickerControllerDelegate, UINav
           result(FlutterMethodNotImplemented)
         }
       }
+
     }
 
     GeneratedPluginRegistrant.register(with: self)

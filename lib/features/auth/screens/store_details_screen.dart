@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../../theme/app_theme.dart';
 import '../data/profile_image_picker.dart';
@@ -48,6 +52,8 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
   double _deliveryRadius = 5;
   String? _coverImagePath;
   String? _logoImagePath;
+  double? _selectedLat;
+  double? _selectedLng;
   bool _submitting = false;
   bool _loadingRestaurant = false;
   bool _loadingCuisines = false;
@@ -92,6 +98,8 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
     _foodType = restaurant?.foodType ?? 'both';
     _coverImagePath = restaurant?.coverImage;
     _logoImagePath = restaurant?.restaurantLogo;
+    _selectedLat = restaurant?.latitude;
+    _selectedLng = restaurant?.longitude;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadRestaurant();
       _loadCuisines();
@@ -175,6 +183,8 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
 
     _coverImagePath = restaurant.coverImage ?? _coverImagePath;
     _logoImagePath = restaurant.restaurantLogo ?? _logoImagePath;
+    _selectedLat = restaurant.latitude ?? _selectedLat;
+    _selectedLng = restaurant.longitude ?? _selectedLng;
     _selectedCuisine = _findCuisineForText(_cuisineController.text);
   }
 
@@ -318,6 +328,27 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
     }
   }
 
+  Future<void> _openMapAddressPicker() async {
+    final result = await Navigator.of(context).push<_StoreAddressResult>(
+      MaterialPageRoute<_StoreAddressResult>(
+        builder: (context) => _StoreAddressSelectionScreen(
+          initialAddress: _addressController.text,
+          initialCity: _cityController.text,
+          initialLat: _selectedLat,
+          initialLng: _selectedLng,
+        ),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+    setState(() {
+      _addressController.text = result.address;
+      _cityController.text = result.city;
+      _selectedLat = result.latitude;
+      _selectedLng = result.longitude;
+    });
+  }
+
   Future<void> _submitRestaurant() async {
     if (_submitting) return;
 
@@ -357,6 +388,8 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
           restaurantEmail: _emailController.text.trim(),
           restaurantAddress: restaurantAddress,
           city: city,
+          latitude: _selectedLat,
+          longitude: _selectedLng,
           cuisineType: cuisineType,
           foodType: _foodType,
           minimumOrderAmount: minimumOrder,
@@ -522,10 +555,17 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                _StoreInput(
-                  label: 'RESTAURANT ADDRESS',
-                  controller: _addressController,
-                  prefixText: '📍  ',
+                Text(
+                  'RESTAURANT ADDRESS',
+                  style: _labelStyle(palette),
+                ),
+                const SizedBox(height: 8),
+                _StoreAddressPickerCard(
+                  address: _addressController.text,
+                  city: _cityController.text,
+                  latitude: _selectedLat,
+                  longitude: _selectedLng,
+                  onTap: _openMapAddressPicker,
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -700,6 +740,965 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
 }
 
 enum _StoreImageSlot { cover, logo }
+
+String _formatCoordinate(double value) => value.toStringAsFixed(5);
+
+class _StoreAddressResult {
+  const _StoreAddressResult({
+    required this.address,
+    required this.city,
+    this.latitude,
+    this.longitude,
+  });
+
+  final String address;
+  final String city;
+  final double? latitude;
+  final double? longitude;
+}
+
+class _ResolvedStoreAddress {
+  const _ResolvedStoreAddress({
+    required this.address,
+    required this.city,
+    required this.landmark,
+  });
+
+  final String address;
+  final String city;
+  final String landmark;
+}
+
+class _StoreAddressPickerCard extends StatelessWidget {
+  const _StoreAddressPickerCard({
+    required this.address,
+    required this.city,
+    required this.latitude,
+    required this.longitude,
+    required this.onTap,
+  });
+
+  final String address;
+  final String city;
+  final double? latitude;
+  final double? longitude;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+    final hasAddress = address.trim().isNotEmpty;
+    final hasCoordinates = latitude != null && longitude != null;
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: palette.fieldFill,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: palette.fieldBorder, width: 1.1),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: palette.softGreen.withValues(alpha: 0.74),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.map_outlined,
+                  color: palette.greenDark,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasAddress ? address.trim() : 'Select restaurant address',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hasAddress ? palette.text : palette.mutedText,
+                        fontSize: 14,
+                        height: 1.25,
+                        fontWeight: hasAddress
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      hasCoordinates
+                          ? '${_formatCoordinate(latitude!)}, ${_formatCoordinate(longitude!)}'
+                          : city.trim().isEmpty
+                          ? 'City and location pin'
+                          : city.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hasCoordinates
+                            ? palette.greenDark
+                            : palette.mutedText,
+                        fontSize: 12,
+                        height: 1.2,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: palette.mutedText,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StoreAddressSelectionScreen extends StatefulWidget {
+  const _StoreAddressSelectionScreen({
+    required this.initialAddress,
+    required this.initialCity,
+    required this.initialLat,
+    required this.initialLng,
+  });
+
+  final String initialAddress;
+  final String initialCity;
+  final double? initialLat;
+  final double? initialLng;
+
+  @override
+  State<_StoreAddressSelectionScreen> createState() =>
+      _StoreAddressSelectionScreenState();
+}
+
+class _StoreAddressSelectionScreenState
+    extends State<_StoreAddressSelectionScreen> {
+  static const LatLng _defaultMapCenter = LatLng(28.6139, 77.2090);
+  static const String _mapboxAccessToken = String.fromEnvironment(
+    'MAPBOX_ACCESS_TOKEN',
+  );
+  static const String _mapboxStylePath = String.fromEnvironment(
+    'MAPBOX_STYLE_PATH',
+    defaultValue: 'mapbox/streets-v12',
+  );
+
+  late final TextEditingController _addressController;
+  late final TextEditingController _cityController;
+  late final TextEditingController _landmarkController;
+  late final MapController _mapController;
+  double? _selectedLat;
+  double? _selectedLng;
+  bool _locating = false;
+  bool _resolvingAddress = false;
+  int _addressLookupSerial = 0;
+
+  LatLng get _mapCenter => LatLng(
+    _selectedLat ?? _defaultMapCenter.latitude,
+    _selectedLng ?? _defaultMapCenter.longitude,
+  );
+
+  String get _tileUrlTemplate {
+    if (_mapboxAccessToken.isEmpty) {
+      return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+    }
+
+    final stylePath = _mapboxStylePath.replaceFirst(RegExp(r'^/+'), '');
+    return 'https://api.mapbox.com/styles/v1/$stylePath/tiles/256/{z}/{x}/{y}@2x?access_token=$_mapboxAccessToken';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _addressController = TextEditingController(text: widget.initialAddress);
+    _cityController = TextEditingController(text: widget.initialCity);
+    _landmarkController = TextEditingController();
+    _mapController = MapController();
+    _selectedLat = widget.initialLat;
+    _selectedLng = widget.initialLng;
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _cityController.dispose();
+    _landmarkController.dispose();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _setPinnedLocation(
+    double latitude,
+    double longitude, {
+    bool move = false,
+  }) {
+    setState(() {
+      _selectedLat = latitude;
+      _selectedLng = longitude;
+    });
+
+    if (move) {
+      _mapController.move(LatLng(latitude, longitude), 15);
+    }
+  }
+
+  Future<void> _pinAndResolveLocation(
+    double latitude,
+    double longitude, {
+    bool move = false,
+    bool showSuccess = false,
+  }) async {
+    _setPinnedLocation(latitude, longitude, move: move);
+    await _resolveAddressForLocation(
+      latitude,
+      longitude,
+      showSuccess: showSuccess,
+    );
+  }
+
+  Future<void> _resolveAddressForLocation(
+    double latitude,
+    double longitude, {
+    bool showSuccess = false,
+  }) async {
+    final lookupId = ++_addressLookupSerial;
+    setState(() => _resolvingAddress = true);
+
+    try {
+      final resolved = _mapboxAccessToken.isEmpty
+          ? await _fetchOsmResolvedAddress(latitude, longitude)
+          : await _fetchMapboxResolvedAddress(latitude, longitude);
+
+      if (!mounted || lookupId != _addressLookupSerial) return;
+
+      if (resolved == null) {
+        _showMessage('Location pinned. Enter address manually.');
+        return;
+      }
+
+      _applyResolvedAddress(resolved);
+      if (showSuccess) {
+        _showMessage('Current location and address filled.');
+      }
+    } catch (_) {
+      if (mounted && lookupId == _addressLookupSerial) {
+        _showMessage('Location pinned. Unable to fetch address.');
+      }
+    } finally {
+      if (mounted && lookupId == _addressLookupSerial) {
+        setState(() => _resolvingAddress = false);
+      }
+    }
+  }
+
+  void _applyResolvedAddress(_ResolvedStoreAddress resolved) {
+    setState(() {
+      if (resolved.city.isNotEmpty) {
+        _cityController.text = resolved.city;
+      }
+      if (resolved.address.isNotEmpty) {
+        _addressController.text = resolved.address;
+      }
+      _landmarkController.text = resolved.landmark;
+    });
+  }
+
+  Future<_ResolvedStoreAddress?> _fetchMapboxResolvedAddress(
+    double latitude,
+    double longitude,
+  ) async {
+    final uri = Uri.https('api.mapbox.com', '/search/geocode/v6/reverse', {
+      'latitude': latitude.toString(),
+      'longitude': longitude.toString(),
+      'access_token': _mapboxAccessToken,
+    });
+    final data = await _readJsonObject(uri);
+    final features = data?['features'];
+    if (features is! List || features.isEmpty) return null;
+
+    for (final item in features) {
+      final feature = _asJsonObject(item);
+      final properties = _asJsonObject(feature?['properties']);
+      if (properties == null) continue;
+
+      final context = _asJsonObject(properties['context']);
+      final placeFormatted = _stringValue(properties['place_formatted']);
+      final name = _stringValue(properties['name']);
+      final fullAddress = _firstNonEmpty([
+        _stringValue(properties['full_address']),
+        _joinAddressParts([name, placeFormatted]),
+        _stringValue(properties['address']),
+      ]);
+      final city = _firstNonEmpty([
+        _contextName(context, 'place'),
+        _contextName(context, 'locality'),
+        _contextName(context, 'district'),
+        _contextName(context, 'region'),
+      ]);
+      final landmark = _firstNonEmpty([
+        if (name != city) name,
+        _contextName(context, 'neighborhood'),
+        _contextName(context, 'street'),
+      ]);
+
+      if (fullAddress.isNotEmpty || city.isNotEmpty) {
+        return _ResolvedStoreAddress(
+          address: fullAddress,
+          city: city,
+          landmark: landmark,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  Future<_ResolvedStoreAddress?> _fetchOsmResolvedAddress(
+    double latitude,
+    double longitude,
+  ) async {
+    final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+      'format': 'jsonv2',
+      'lat': latitude.toString(),
+      'lon': longitude.toString(),
+      'addressdetails': '1',
+    });
+    final data = await _readJsonObject(uri);
+    if (data == null) return null;
+
+    final address = _asJsonObject(data['address']) ?? const {};
+    final city = _firstNonEmpty([
+      _stringValue(address['city']),
+      _stringValue(address['town']),
+      _stringValue(address['village']),
+      _stringValue(address['municipality']),
+      _stringValue(address['county']),
+      _stringValue(address['state_district']),
+      _stringValue(address['state']),
+    ]);
+    final landmark = _firstNonEmpty([
+      _stringValue(address['amenity']),
+      _stringValue(address['shop']),
+      _stringValue(address['tourism']),
+      _stringValue(address['building']),
+      _stringValue(address['neighbourhood']),
+      _stringValue(address['suburb']),
+      _stringValue(address['road']),
+    ]);
+    final displayAddress = _firstNonEmpty([
+      _stringValue(data['display_name']),
+      _joinAddressParts([
+        landmark,
+        _stringValue(address['road']),
+        _stringValue(address['suburb']),
+        city,
+        _stringValue(address['postcode']),
+      ]),
+    ]);
+
+    if (displayAddress.isEmpty && city.isEmpty) return null;
+
+    return _ResolvedStoreAddress(
+      address: displayAddress,
+      city: city,
+      landmark: landmark,
+    );
+  }
+
+  Future<Map<String, dynamic>?> _readJsonObject(Uri uri) async {
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(HttpHeaders.userAgentHeader, 'qadam_food_seller/1.0');
+
+      final response = await request.close().timeout(
+        const Duration(seconds: 12),
+      );
+      final body = await utf8.decodeStream(response).timeout(
+        const Duration(seconds: 12),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+
+      final decoded = jsonDecode(body);
+      return _asJsonObject(decoded);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Map<String, dynamic>? _asJsonObject(Object? value) {
+    if (value is! Map) return null;
+    return value.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  String _contextName(Map<String, dynamic>? context, String key) {
+    final contextValue = _asJsonObject(context?[key]);
+    return _stringValue(contextValue?['name']);
+  }
+
+  String _joinAddressParts(List<String> parts) {
+    return parts.where((part) => part.trim().isNotEmpty).join(', ');
+  }
+
+  String _firstNonEmpty(List<String> values) {
+    for (final value in values) {
+      final trimmed = value.trim();
+      if (trimmed.isNotEmpty) return trimmed;
+    }
+    return '';
+  }
+
+  String _stringValue(Object? value) {
+    if (value == null) return '';
+    return value.toString().trim();
+  }
+
+  Future<void> _useCurrentLocation() async {
+    if (_locating) return;
+
+    setState(() => _locating = true);
+    try {
+      final hasPermission = await _ensureLocationPermission();
+      if (!hasPermission) return;
+
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        final openSettings = await _showLocationActionDialog(
+          title: 'Turn on device location',
+          message:
+              'Location permission is allowed, but device location is turned off. Turn it on to pin your restaurant.',
+          primaryLabel: 'Open Settings',
+        );
+        if (openSettings == true) {
+          await Geolocator.openLocationSettings();
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      if (!mounted) return;
+      await _pinAndResolveLocation(
+        position.latitude,
+        position.longitude,
+        move: true,
+        showSuccess: true,
+      );
+    } catch (_) {
+      if (mounted) _showMessage('Unable to fetch current location.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<bool> _ensureLocationPermission() async {
+    var permission = await Geolocator.checkPermission();
+    if (_hasLocationPermission(permission)) return true;
+
+    if (permission == LocationPermission.denied) {
+      final shouldRequest = await _showLocationActionDialog(
+        title: 'Allow location access',
+        message:
+            'We need location permission to pin your restaurant coordinates for delivery.',
+        primaryLabel: 'Allow',
+      );
+      if (shouldRequest != true) return false;
+
+      permission = await Geolocator.requestPermission();
+      if (_hasLocationPermission(permission)) return true;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      final openSettings = await _showLocationActionDialog(
+        title: 'Location permission blocked',
+        message:
+            'Location permission is blocked for this app. Open app settings and allow location access.',
+        primaryLabel: 'App Settings',
+      );
+      if (openSettings == true) {
+        await Geolocator.openAppSettings();
+      }
+      return false;
+    }
+
+    _showMessage('Location permission was not granted.');
+    return false;
+  }
+
+  bool _hasLocationPermission(LocationPermission permission) {
+    return permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+  }
+
+  Future<bool?> _showLocationActionDialog({
+    required String title,
+    required String message,
+    required String primaryLabel,
+  }) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: palette.screen,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: Text(
+            title,
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
+          ),
+          content: Text(
+            message,
+            style: TextStyle(
+              color: palette.mutedText,
+              fontSize: 14,
+              height: 1.35,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0,
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: palette.mutedText,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.greenDark,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                primaryLabel,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _confirmSelection() {
+    final city = _cityController.text.trim();
+    final address = _addressController.text.trim();
+    final landmark = _landmarkController.text.trim();
+
+    if (city.isEmpty) {
+      _showMessage('Enter city');
+      return;
+    }
+
+    if (address.isEmpty) {
+      _showMessage('Enter restaurant address');
+      return;
+    }
+
+    final fullAddress = landmark.isEmpty ? address : '$address, $landmark';
+    Navigator.pop(
+      context,
+      _StoreAddressResult(
+        address: fullAddress,
+        city: city,
+        latitude: _selectedLat,
+        longitude: _selectedLng,
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _buildOpenMapPicker(AuthPalette palette) {
+    final hasCoordinates = _selectedLat != null && _selectedLng != null;
+    final instructionText = _resolvingAddress
+        ? 'Finding address...'
+        : hasCoordinates
+        ? 'Tap map to move pin'
+        : 'Tap map to pin';
+    final coordinateText = _resolvingAddress
+        ? 'Fetching city and address'
+        : hasCoordinates
+        ? '${_formatCoordinate(_selectedLat!)}, ${_formatCoordinate(_selectedLng!)}'
+        : 'No pin selected';
+    final coordinateIcon = hasCoordinates
+        ? Icons.check_circle_rounded
+        : Icons.location_searching_rounded;
+
+    return Container(
+      height: 218,
+      decoration: BoxDecoration(
+        color: palette.fieldFill,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasCoordinates ? palette.green : palette.fieldBorder,
+          width: 1.1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _mapCenter,
+              initialZoom: hasCoordinates ? 15 : 4,
+              minZoom: 3,
+              maxZoom: 18,
+              backgroundColor: palette.softGreen.withValues(alpha: 0.35),
+              onTap: (_, point) async {
+                await _pinAndResolveLocation(point.latitude, point.longitude);
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: _tileUrlTemplate,
+                userAgentPackageName: 'qadam_food_seller',
+              ),
+              if (hasCoordinates)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _mapCenter,
+                      width: 52,
+                      height: 52,
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: palette.greenDark.withValues(alpha: 0.18),
+                              blurRadius: 16,
+                              offset: const Offset(0, 7),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.location_pin,
+                          color: palette.greenDark,
+                          size: 38,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          Positioned(
+            left: 12,
+            top: 12,
+            child: _MapStatusChip(
+              icon: Icons.touch_app_rounded,
+              text: instructionText,
+              palette: palette,
+            ),
+          ),
+          Positioned(
+            right: 12,
+            bottom: 12,
+            child: _MapStatusChip(
+              icon: coordinateIcon,
+              text: coordinateText,
+              palette: palette,
+              isActive: hasCoordinates,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+    final hasCoordinates = _selectedLat != null && _selectedLng != null;
+    final currentLocationTitle = _locating
+        ? 'Fetching current location'
+        : _resolvingAddress
+        ? 'Finding address'
+        : hasCoordinates
+        ? 'Location pinned'
+        : 'Use current location';
+    final currentLocationSubtitle = _resolvingAddress
+        ? 'City, address, and landmark will fill automatically.'
+        : hasCoordinates
+        ? '${_formatCoordinate(_selectedLat!)}, ${_formatCoordinate(_selectedLng!)}'
+        : 'Adds latitude and longitude for delivery.';
+
+    return Scaffold(
+      backgroundColor: palette.screen,
+      body: LightAuthTextureBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    BackTextButton(onPressed: () => Navigator.pop(context)),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: _confirmSelection,
+                      child: Text(
+                        'Done',
+                        style: TextStyle(
+                          color: palette.greenDark,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Restaurant Address',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 24,
+                    height: 1.1,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Add the city, full address, and optional location pin.',
+                  style: TextStyle(
+                    color: palette.mutedText,
+                    fontSize: 14,
+                    height: 1.32,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _buildOpenMapPicker(palette),
+                const SizedBox(height: 20),
+                _StoreInput(
+                  label: 'CITY',
+                  controller: _cityController,
+                  prefixText: '  ',
+                ),
+                const SizedBox(height: 16),
+                _StoreInput(
+                  label: 'ADDRESS',
+                  controller: _addressController,
+                  prefixText: '  ',
+                ),
+                const SizedBox(height: 16),
+                _StoreInput(
+                  label: 'LANDMARK OPTIONAL',
+                  controller: _landmarkController,
+                  prefixText: '  ',
+                ),
+                const SizedBox(height: 18),
+                Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    onTap: _locating ? null : _useCurrentLocation,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: palette.fieldFill,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: hasCoordinates
+                              ? palette.green
+                              : palette.fieldBorder,
+                          width: 1.1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: palette.softGreen.withValues(alpha: 0.74),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: _locating || _resolvingAddress
+                                ? SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        palette.greenDark,
+                                      ),
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.my_location_rounded,
+                                    color: palette.greenDark,
+                                    size: 21,
+                                  ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  currentLocationTitle,
+                                  style: TextStyle(
+                                    color: palette.text,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  currentLocationSubtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: hasCoordinates
+                                        ? palette.greenDark
+                                        : palette.mutedText,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: palette.mutedText,
+                            size: 22,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapStatusChip extends StatelessWidget {
+  const _MapStatusChip({
+    required this.icon,
+    required this.text,
+    required this.palette,
+    this.isActive = false,
+  });
+
+  final IconData icon;
+  final String text;
+  final AuthPalette palette;
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? palette.greenDark : palette.text;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 218),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: palette.screen.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: palette.fieldBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _CoverImagePicker extends StatelessWidget {
   const _CoverImagePicker({

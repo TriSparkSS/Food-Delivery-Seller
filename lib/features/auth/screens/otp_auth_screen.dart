@@ -121,10 +121,11 @@ class _OtpAuthScreenState extends State<OtpAuthScreen> {
             AuthHeaderBlock(
               stepIndex: 1,
               showStepIndicator: false,
-              icon: const Icon(
-                Icons.lock_open_rounded,
-                color: Colors.amber,
-                size: 38,
+              icon: Image.asset(
+                'assets/images/app_logo.png',
+                color: Colors.white,
+                height: 150,
+                width: 150,
               ),
               title: 'Verify OTP',
               subtitle: Text.rich(

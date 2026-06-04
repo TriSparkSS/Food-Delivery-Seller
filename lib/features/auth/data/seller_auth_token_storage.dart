@@ -74,6 +74,19 @@ class SellerAuthTokenStorage {
     );
   }
 
+  Future<void> saveVerificationStatus(String? verificationStatus) async {
+    final preferences = await SharedPreferences.getInstance();
+    final cleanVerificationStatus = verificationStatus?.trim();
+    if (cleanVerificationStatus == null || cleanVerificationStatus.isEmpty) {
+      await preferences.remove(_verificationStatusKey);
+    } else {
+      await preferences.setString(
+        _verificationStatusKey,
+        cleanVerificationStatus,
+      );
+    }
+  }
+
   Future<void> clearToken() async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(_tokenKey);

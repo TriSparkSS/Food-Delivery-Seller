@@ -178,6 +178,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     return SellerWorkScaffold(
       horizontalPadding: 18,
       title: 'Settings',
+      subtitle: 'Store, hours, alerts, and account',
       trailing: const SellerHeaderIcon(Icons.settings_rounded),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

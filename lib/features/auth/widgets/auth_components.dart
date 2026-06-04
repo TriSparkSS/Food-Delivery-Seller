@@ -61,11 +61,16 @@ class AuthPageScaffold extends StatelessWidget {
 }
 
 class LightAuthTextureBackground extends StatelessWidget {
-  const LightAuthTextureBackground({required this.child, super.key});
+  const LightAuthTextureBackground({
+    required this.child,
+    this.opacity = 1,
+    super.key,
+  });
 
   static const String assetPath = 'assets/images/onboard_background.png';
 
   final Widget child;
+  final double opacity;
 
   @override
   Widget build(BuildContext context) {
@@ -79,9 +84,10 @@ class LightAuthTextureBackground extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: palette.screen,
-        image: const DecorationImage(
-          image: AssetImage(assetPath),
+        image: DecorationImage(
+          image: const AssetImage(assetPath),
           fit: BoxFit.cover,
+          opacity: opacity,
         ),
       ),
       child: child,
@@ -1093,20 +1099,12 @@ class SplashLogoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-      ),
-      child: const Center(
-        child: Icon(
-          Icons.restaurant_menu_rounded,
-          color: Colors.white,
-          size: 38,
-        ),
+    return Center(
+      child: Image.asset(
+        'assets/images/app_logo.png',
+        color: Colors.white,
+        height: 230,
+        width: 230,
       ),
     );
   }

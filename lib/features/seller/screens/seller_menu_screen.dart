@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../auth/widgets/auth_components.dart';
 
 class SellerMenuScreen extends StatefulWidget {
   const SellerMenuScreen({super.key});
@@ -139,73 +140,108 @@ class SellerWorkScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AuthPalette>()!;
-
-    return ColoredBox(
-      color: palette.screen,
+    return LightAuthTextureBackground(
+      opacity: Theme.of(context).brightness == Brightness.dark ? 0.025 : 0.08,
       child: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.fromLTRB(
             horizontalPadding,
-            18,
+            28,
             horizontalPadding,
             bottomPadding,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (title != null) ...[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            title!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: palette.text,
-                              fontSize: 24,
-                              height: 1.05,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0,
-                            ),
-                          ),
-                          if (subtitle != null) ...[
-                            const SizedBox(height: 6),
-                            SellerMutedText(subtitle!, fontSize: 13),
-                          ],
-                        ],
-                      ),
-                    ),
-                    if (trailing != null) ...[
-                      const SizedBox(width: 14),
-                      trailing!,
-                    ],
-                  ],
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 12 * (1 - value)),
+                  child: child,
                 ),
-                const SizedBox(height: 22),
-              ] else ...[
-                SizedBox(
-                  height: 28,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: trailing,
+              );
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (title != null) ...[
+                  _SellerPageHeader(
+                    title: title!,
+                    subtitle: subtitle,
+                    trailing: trailing,
                   ),
-                ),
-                const SizedBox(height: 22),
+                  const SizedBox(height: 22),
+                ] else ...[
+                  SizedBox(
+                    height: 28,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: trailing,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                ],
+                child,
               ],
-              child,
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SellerPageHeader extends StatelessWidget {
+  const _SellerPageHeader({
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 24,
+                  height: 1.05,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 6),
+                SellerMutedText(subtitle!, fontSize: 13),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: 14),
+          trailing!,
+        ],
+      ],
     );
   }
 }
@@ -219,11 +255,61 @@ class SellerHeaderIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
 
-    return SizedBox.square(
-      dimension: 36,
-      child: Center(
-        child: Icon(icon, color: palette.text, size: 21),
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: palette.fieldFill.withValues(alpha: 0.94),
+        shape: BoxShape.circle,
+        border: Border.all(color: palette.fieldBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 7),
+          ),
+        ],
       ),
+      child: Icon(icon, color: palette.text, size: 20),
+    );
+  }
+}
+
+class SellerIconBadge extends StatelessWidget {
+  const SellerIconBadge({
+    required this.child,
+    this.size = 42,
+    this.background,
+    super.key,
+  });
+
+  final Widget child;
+  final double size;
+  final Color? background;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background ?? palette.softGreen,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: palette.greenDark.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (background ?? palette.greenDark).withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }
@@ -251,7 +337,8 @@ class _CategoryTile extends StatelessWidget {
       child: Column(
         children: [
           AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             height: 62,
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -261,6 +348,15 @@ class _CategoryTile extends StatelessWidget {
                 color: selected ? palette.greenDark : palette.fieldBorder,
                 width: selected ? 1.5 : 1.1,
               ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: palette.greenDark.withValues(alpha: 0.12),
+                        blurRadius: 18,
+                        offset: const Offset(0, 9),
+                      ),
+                    ]
+                  : null,
             ),
             child: Text(emoji, style: const TextStyle(fontSize: 25)),
           ),
@@ -283,11 +379,13 @@ class SellerCard extends StatelessWidget {
   const SellerCard({
     required this.child,
     this.padding = const EdgeInsets.all(20),
+    this.highlight = false,
     super.key,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
@@ -296,9 +394,25 @@ class SellerCard extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: palette.fieldFill.withValues(alpha: 0.96),
+        color: palette.fieldFill.withValues(alpha: 0.97),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: palette.fieldBorder, width: 1.1),
+        border: Border.all(
+          color: highlight
+              ? palette.greenDark.withValues(alpha: 0.22)
+              : palette.fieldBorder,
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(
+              alpha: Theme.of(context).brightness == Brightness.dark
+                  ? 0.18
+                  : 0.045,
+            ),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: child,
     );
@@ -330,14 +444,9 @@ class _MenuProductRow extends StatelessWidget {
 
     return Row(
       children: [
-        Container(
-          width: 64,
-          height: 64,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: palette.softGreen,
-            borderRadius: BorderRadius.circular(14),
-          ),
+        SellerIconBadge(
+          size: 62,
+          background: palette.softGreen.withValues(alpha: 0.9),
           child: Text(emoji, style: const TextStyle(fontSize: 25)),
         ),
         const SizedBox(width: 14),

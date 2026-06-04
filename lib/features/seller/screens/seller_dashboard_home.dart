@@ -50,28 +50,41 @@ class SellerDashboardHome extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
-            children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final gap = constraints.maxWidth < 360 ? 8.0 : 12.0;
+
+              return Row(
+                children: [
               Expanded(
-                child: _MetricCard(
+                child: const _MetricCard(
                   icon: '📦',
                   value: '47',
                   label: 'Orders Today',
+                  accent: Color(0xFF10B981),
                 ),
               ),
-              SizedBox(width: 12),
+              SizedBox(width: gap),
               Expanded(
-                child: _MetricCard(
+                child: const _MetricCard(
                   icon: '💰',
                   value: r'$1,284',
                   label: 'Revenue',
+                  accent: Color(0xFF3B82F6),
                 ),
               ),
-              SizedBox(width: 12),
+              SizedBox(width: gap),
               Expanded(
-                child: _MetricCard(icon: '⭐', value: '4.8', label: 'Rating'),
+                child: const _MetricCard(
+                  icon: '⭐',
+                  value: '4.8',
+                  label: 'Rating',
+                  accent: Color(0xFFFF9F0A),
+                ),
               ),
             ],
+              );
+            },
           ),
           const SizedBox(height: 18),
           SellerCard(
@@ -150,32 +163,53 @@ class _MetricCard extends StatelessWidget {
     required this.icon,
     required this.value,
     required this.label,
+    required this.accent,
   });
 
   final String icon;
   final String value;
   final String label;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
 
     return SellerCard(
-      padding: const EdgeInsets.fromLTRB(16, 16, 12, 18),
+      highlight: true,
+      padding: const EdgeInsets.fromLTRB(12, 12, 10, 15),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: palette.softGreen,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Text(icon, style: const TextStyle(fontSize: 20)),
+          Row(
+            children: [
+              SellerIconBadge(
+                size: 34,
+                background: accent.withValues(alpha: 0.12),
+                child: Text(icon, style: const TextStyle(fontSize: 17)),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 15),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -183,7 +217,7 @@ class _MetricCard extends StatelessWidget {
               value,
               style: TextStyle(
                 color: palette.text,
-                fontSize: 25,
+                fontSize: 18,
                 height: 1,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0,
@@ -191,7 +225,18 @@ class _MetricCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          SellerMutedText(label, fontSize: 12),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: palette.mutedText,
+              fontSize: 11.5,
+              height: 1.15,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0,
+            ),
+          ),
         ],
       ),
     );

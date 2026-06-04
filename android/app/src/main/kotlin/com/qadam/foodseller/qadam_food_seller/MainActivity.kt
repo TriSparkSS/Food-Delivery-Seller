@@ -58,6 +58,7 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
     }
 
     private fun pickImage(source: String, result: MethodChannel.Result) {

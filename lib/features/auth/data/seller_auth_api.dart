@@ -324,7 +324,12 @@ class SellerVerifyOtpResponse {
 
   bool get isVerificationInReview {
     final status = _normalizedVerificationStatus;
-    return status == 'in_review' || status == 'under_review';
+    return status == 'in_review' ||
+        status == 'under_review' ||
+        status == 'pending' ||
+        status == 'pending_review' ||
+        status == 'submitted' ||
+        status == 'processing';
   }
 
   bool get isVerificationFailed {
@@ -385,6 +390,7 @@ class SellerVerificationSessionResponse {
     required this.message,
     required this.sessionUrl,
     this.sessionId = '',
+    this.workflowId = '',
     this.sessionToken = '',
     this.sdkToken = '',
   });
@@ -392,6 +398,7 @@ class SellerVerificationSessionResponse {
   final String message;
   final String sessionUrl;
   final String sessionId;
+  final String workflowId;
   final String sessionToken;
   final String sdkToken;
 
@@ -407,21 +414,29 @@ class SellerVerificationSessionResponse {
     final sessionId =
         _stringFrom(data['session_id']) ??
         _stringFrom(decisionPayload['session_id']);
+    final urlSessionToken = _sessionTokenFromVerificationUrl(sessionUrl);
+    final workflowId =
+        _stringFrom(data['workflow_id']) ??
+        _stringFrom(decisionPayload['workflow_id']) ??
+        _stringFrom(json['workflow_id']);
     final sessionToken =
         _stringFrom(data['session_token']) ??
-        _stringFrom(decisionPayload['session_token']);
+        _stringFrom(decisionPayload['session_token']) ??
+        urlSessionToken;
     final sdkToken =
         _stringFrom(json['sdk_token']) ??
         _stringFrom(json['session_token']) ??
         _stringFrom(data['sdk_token']) ??
         _stringFrom(data['session_token']) ??
         _stringFrom(data['token']) ??
-        _stringFrom(decisionPayload['session_token']);
+        _stringFrom(decisionPayload['session_token']) ??
+        urlSessionToken;
 
     return SellerVerificationSessionResponse(
       message: _stringFrom(json['message']) ?? 'Verification session created',
       sessionUrl: sessionUrl ?? '',
       sessionId: sessionId ?? '',
+      workflowId: workflowId ?? '',
       sessionToken: sessionToken ?? '',
       sdkToken: sdkToken ?? '',
     );
@@ -925,7 +940,7 @@ class NetworkSellerAuthApi implements SellerAuthApi {
     this.cuisinesPath = '/auth/cuisines',
     this.restaurantPath = '/auth/restaurant',
     this.logoutPath = '/auth/logout',
-    this.deleteAccountPath = '/delete/account',
+    this.deleteAccountPath = '/auth/delete/account',
   });
 
   final String baseUrl;
@@ -1390,6 +1405,26 @@ List<Object?> _listFrom(Object? value) {
   if (value is List<Object?>) return value;
   if (value is List) return List<Object?>.from(value);
   return const [];
+}
+
+String? _sessionTokenFromVerificationUrl(String? value) {
+  final url = value?.trim();
+  if (url == null || url.isEmpty) return null;
+
+  final uri = Uri.tryParse(url);
+  final segments = uri?.pathSegments
+      .where((segment) => segment.trim().isNotEmpty)
+      .toList();
+  if (segments != null && segments.isNotEmpty) {
+    return segments.last.trim();
+  }
+
+  final slashIndex = url.lastIndexOf('/');
+  if (slashIndex >= 0 && slashIndex < url.length - 1) {
+    return url.substring(slashIndex + 1).trim();
+  }
+
+  return null;
 }
 
 String? _stringFrom(Object? value) {

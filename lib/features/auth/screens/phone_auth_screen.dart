@@ -29,10 +29,11 @@ class PhoneAuthScreen extends StatelessWidget {
           controller: controller,
           country: country,
           onCountryChanged: onCountryChanged,
-          icon: const Icon(
-            Icons.dialpad_rounded,
+          icon: Image.asset(
+            'assets/images/app_logo.png',
             color: Colors.white,
-            size: 34,
+            height: 150,
+            width: 150,
           ),
           title: 'Get Started',
           subtitle: const Text('Enter your phone number to continue'),
@@ -81,10 +82,11 @@ class SignupPhoneAuthScreen extends StatelessWidget {
           controller: controller,
           country: country,
           onCountryChanged: onCountryChanged,
-          icon: const Icon(
-            Icons.person_add_alt_1_rounded,
+          icon: Image.asset(
+            'assets/images/app_logo.png',
             color: Colors.white,
-            size: 35,
+            height: 150,
+            width: 150,
           ),
           title: 'Sign Up',
           subtitle: const Text(
