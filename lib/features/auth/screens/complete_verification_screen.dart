@@ -33,7 +33,7 @@ class CompleteVerificationScreen extends StatefulWidget {
 class _CompleteVerificationScreenState
     extends State<CompleteVerificationScreen> {
   String? _verificationMessage;
-  String _verificationStatus = 'Approved';
+  String _verificationStatus = 'approved';
   SellerVerificationStatusResponse? _verificationStatusResponse;
   bool _loadingStatus = false;
 
@@ -79,7 +79,7 @@ class _CompleteVerificationScreenState
       if (!mounted) return;
       setState(() {
         _verificationStatusResponse = status;
-        _verificationStatus = status.statusLabel;
+        _verificationStatus = status.combinedStatusLabel;
         _verificationMessage = status.displayMessage;
       });
     } on SellerAuthException catch (error) {
@@ -95,7 +95,12 @@ class _CompleteVerificationScreenState
     final palette = Theme.of(context).extension<AuthPalette>()!;
     final verification = _verificationStatusResponse;
     final statusValue = verification?.status ?? _verificationStatus;
+    final restaurantStatusValue = verification?.restaurantStatus;
     final tone = _VerificationTone.fromStatus(statusValue, palette);
+    final restaurantTone = _VerificationTone.fromStatus(
+      restaurantStatusValue,
+      palette,
+    );
     final faceMatch = verification?.faceMatch;
     final livenessCheck = verification?.livenessCheck;
     final faceTone = _VerificationTone.fromStatus(
@@ -123,62 +128,42 @@ class _CompleteVerificationScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Verification Status',
-                              style: TextStyle(
-                                color: palette.text,
-                                fontSize: 28,
-                                height: 1.05,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Didit KYB Results',
-                              style: TextStyle(
-                                color: palette.mutedText,
-                                fontSize: 15,
-                                height: 1.2,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Material(
-                        color: palette.greenDark,
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: _openDashboard,
-                          child: const SizedBox.square(
-                            dimension: 42,
-                            child: Icon(
-                              Icons.check_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'Verification Status',
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 28,
+                      height: 1.05,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Didit and Restaurant Review',
+                    style: TextStyle(
+                      color: palette.mutedText,
+                      fontSize: 15,
+                      height: 1.2,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
                   ),
                   const SizedBox(height: 24),
-                  _StatusCard(
-                    status: _verificationStatus,
-                    message: _verificationMessage,
-                    loading: _loadingStatus,
-                    tone: tone,
+                  Center(
+                    child: Image.asset(
+                      'assets/images/app_logo.png',
+                      color: Colors.green,
+                      height: 150,
+                      width: 150,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _DualStatusCard(
+                    diditStatus: verification?.status ?? statusValue,
+                    restaurantStatus: restaurantStatusValue,
+                    diditTone: tone,
+                    restaurantTone: restaurantTone,
                   ),
                   const SizedBox(height: 28),
                   _SectionTitle('Verification Timeline'),
@@ -186,6 +171,7 @@ class _CompleteVerificationScreenState
                   _VerificationTimeline(
                     response: verification,
                     tone: tone,
+                    restaurantTone: restaurantTone,
                   ),
                   const SizedBox(height: 28),
                   _SectionTitle('Verification Scores'),
@@ -208,6 +194,8 @@ class _CompleteVerificationScreenState
                   ),
                   const SizedBox(height: 12),
                   _RiskScoreCard(response: verification, tone: tone),
+                  const SizedBox(height: 28),
+                  _SlideToDashboardButton(onCompleted: _openDashboard),
                 ],
               ),
             ),
@@ -344,6 +332,225 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
+class _DualStatusCard extends StatelessWidget {
+  const _DualStatusCard({
+    required this.diditStatus,
+    required this.restaurantStatus,
+    required this.diditTone,
+    required this.restaurantTone,
+  });
+
+  final String? diditStatus;
+  final String? restaurantStatus;
+  final _VerificationTone diditTone;
+  final _VerificationTone restaurantTone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _StatusPill(
+            title: 'Didit',
+            status: _statusLabelFrom(diditStatus),
+            tone: diditTone,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatusPill(
+            title: 'Restaurant',
+            status: _statusLabelFrom(restaurantStatus),
+            tone: restaurantTone,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({
+    required this.title,
+    required this.status,
+    required this.tone,
+  });
+
+  final String title;
+  final String status;
+  final _VerificationTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 76),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+      decoration: BoxDecoration(
+        color: tone.softColor.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tone.color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: tone.color,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(tone.icon, color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.mutedText,
+                    fontSize: 12,
+                    height: 1.1,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  status,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: tone.color,
+                    fontSize: 13,
+                    height: 1.1,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SlideToDashboardButton extends StatefulWidget {
+  const _SlideToDashboardButton({required this.onCompleted});
+
+  final VoidCallback onCompleted;
+
+  @override
+  State<_SlideToDashboardButton> createState() =>
+      _SlideToDashboardButtonState();
+}
+
+class _SlideToDashboardButtonState extends State<_SlideToDashboardButton> {
+  double _progress = 0;
+  bool _completed = false;
+
+  void _updateProgress(double delta, double width) {
+    if (_completed) return;
+    final travelWidth = (width - 58).clamp(1.0, double.infinity).toDouble();
+    setState(() {
+      _progress = (_progress + delta / travelWidth)
+          .clamp(0.0, 1.0)
+          .toDouble();
+    });
+  }
+
+  void _finishSlide() {
+    if (_completed) return;
+    if (_progress >= 0.86) {
+      setState(() {
+        _completed = true;
+        _progress = 1;
+      });
+      widget.onCompleted();
+      return;
+    }
+
+    setState(() => _progress = 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final knobTravel = (width - 58).clamp(0.0, double.infinity).toDouble();
+
+        return GestureDetector(
+          onHorizontalDragUpdate: (details) {
+            _updateProgress(details.delta.dx, width);
+          },
+          onHorizontalDragEnd: (_) => _finishSlide(),
+          child: Container(
+            height: 58,
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: palette.greenDark,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: palette.greenDark.withValues(alpha: 0.2),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Opacity(
+                  opacity: (1 - _progress * 0.55).clamp(0.45, 1),
+                  child: const Text(
+                    'Slide to Dashboard',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: knobTravel * _progress,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      color: palette.greenDark,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
 
@@ -367,10 +574,15 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _VerificationTimeline extends StatelessWidget {
-  const _VerificationTimeline({required this.response, required this.tone});
+  const _VerificationTimeline({
+    required this.response,
+    required this.tone,
+    required this.restaurantTone,
+  });
 
   final SellerVerificationStatusResponse? response;
   final _VerificationTone tone;
+  final _VerificationTone restaurantTone;
 
   @override
   Widget build(BuildContext context) {
@@ -378,7 +590,11 @@ class _VerificationTimeline extends StatelessWidget {
     final submittedTime = _formatTimelineDate(response?.submittedAt);
     final isApproved = response?.isApproved == true;
     final isFailed = response?.isFailed == true;
+    final isRestaurantApproved = response?.isRestaurantApproved == true;
+    final isRestaurantFailed = response?.isRestaurantFailed == true;
     final statusLabel = response?.statusLabel ?? 'Pending Review';
+    final restaurantStatusLabel =
+        response?.restaurantStatusLabel ?? 'Pending Review';
 
     return Column(
       children: [
@@ -404,12 +620,30 @@ class _VerificationTimeline extends StatelessWidget {
           muted: !isApproved,
         ),
         _TimelineItem(
-          title: isApproved ? 'Admin Approved' : 'Admin Review',
-          time: isApproved
+          title: isRestaurantFailed
+              ? 'Restaurant Needs Review'
+              : isRestaurantApproved
+              ? 'Restaurant Approved'
+              : 'Restaurant Review',
+          time: isRestaurantApproved
               ? submittedTime
-              : isFailed
-              ? statusLabel
-              : 'In review',
+              : isRestaurantFailed
+              ? restaurantStatusLabel
+              : 'Restaurant status: $restaurantStatusLabel',
+          dotColor: isRestaurantApproved
+              ? palette.green
+              : isRestaurantFailed
+              ? restaurantTone.color
+              : palette.fieldBorder,
+          muted: !isRestaurantApproved && !isRestaurantFailed,
+        ),
+        _TimelineItem(
+          title: isApproved && isRestaurantApproved
+              ? 'Dashboard Ready'
+              : 'Dashboard Access',
+          time: isApproved && isRestaurantApproved
+              ? 'Ready to continue'
+              : 'You can continue while review is pending',
           dotColor: isApproved
               ? palette.green
               : isFailed
@@ -763,4 +997,17 @@ String _formatTimelineDate(DateTime? value) {
   final period = local.hour >= 12 ? 'PM' : 'AM';
 
   return '${months[local.month - 1]} ${local.day}, ${local.year} - $hour:$minute $period';
+}
+
+String _statusLabelFrom(String? status) {
+  final normalized = status?.trim().replaceAll(RegExp(r'[_-]+'), ' ') ?? '';
+  if (normalized.isEmpty) return 'Pending Review';
+
+  return normalized
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map((word) {
+        return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+      })
+      .join(' ');
 }

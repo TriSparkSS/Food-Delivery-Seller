@@ -447,6 +447,7 @@ class SellerVerificationStatusResponse {
   const SellerVerificationStatusResponse({
     required this.message,
     this.status,
+    this.restaurantStatus,
     this.submittedAt,
     this.faceMatch,
     this.livenessCheck,
@@ -454,17 +455,58 @@ class SellerVerificationStatusResponse {
 
   final String message;
   final String? status;
+  final String? restaurantStatus;
   final DateTime? submittedAt;
   final SellerVerificationCheck? faceMatch;
   final SellerVerificationCheck? livenessCheck;
 
   String get normalizedStatus => _normalizeVerificationStatusValue(status);
 
+  String get normalizedRestaurantStatus =>
+      _normalizeVerificationStatusValue(restaurantStatus);
+
   String get statusLabel => _verificationStatusLabelFrom(status);
+
+  String get restaurantStatusLabel =>
+      _verificationStatusLabelFrom(restaurantStatus);
+
+  String get combinedStatusLabel {
+    final diditLabel = statusLabel;
+    final restaurantLabel = restaurantStatusLabel;
+    if (restaurantStatus == null || restaurantStatus!.trim().isEmpty) {
+      return diditLabel;
+    }
+    return 'Didit $diditLabel • Restaurant $restaurantLabel';
+  }
 
   bool get isApproved {
     final value = normalizedStatus;
     return value == 'approved' || value == 'verified';
+  }
+
+  bool get isRestaurantApproved {
+    final value = normalizedRestaurantStatus;
+    return value == 'approved' || value == 'verified' || value == 'active';
+  }
+
+  bool get isRestaurantInReview {
+    final value = normalizedRestaurantStatus;
+    return value.isEmpty ||
+        value == 'in_review' ||
+        value == 'under_review' ||
+        value == 'pending' ||
+        value == 'pending_review';
+  }
+
+  bool get isRestaurantFailed {
+    final value = normalizedRestaurantStatus;
+    return value == 'failed' ||
+        value == 'rejected' ||
+        value == 'declined' ||
+        value == 'denied' ||
+        value == 'expired' ||
+        value == 'cancelled' ||
+        value == 'canceled';
   }
 
   bool get isInReview {
@@ -488,8 +530,14 @@ class SellerVerificationStatusResponse {
   }
 
   String get displayMessage {
-    if (isApproved) {
-      return 'Your restaurant is verified';
+    if (isApproved && isRestaurantApproved) {
+      return 'Your identity and restaurant are approved';
+    }
+    if (isApproved && isRestaurantInReview) {
+      return 'Identity approved. Restaurant is pending review';
+    }
+    if (isApproved && isRestaurantFailed) {
+      return 'Identity approved. Restaurant needs attention';
     }
     if (isInReview) {
       return 'Your verification is under review';
@@ -521,6 +569,10 @@ class SellerVerificationStatusResponse {
           _stringFrom(decisionPayload['status']) ??
           _stringFrom(json['verification_status']) ??
           _stringFrom(json['status']),
+      restaurantStatus:
+          _stringFrom(source['restaurant_status']) ??
+          _stringFrom(data['restaurant_status']) ??
+          _stringFrom(json['restaurant_status']),
       submittedAt: _dateTimeFrom(source['submitted_at']),
       faceMatch: SellerVerificationCheck.fromList(faceMatches),
       livenessCheck: SellerVerificationCheck.fromList(livenessChecks),
@@ -775,6 +827,7 @@ class SellerRestaurantProfile {
     this.restaurantName,
     this.restaurantLogo,
     this.coverImage,
+    this.status,
     this.restaurantPhone,
     this.restaurantEmail,
     this.restaurantAddress,
@@ -793,6 +846,7 @@ class SellerRestaurantProfile {
   final String? restaurantName;
   final String? restaurantLogo;
   final String? coverImage;
+  final String? status;
   final String? restaurantPhone;
   final String? restaurantEmail;
   final String? restaurantAddress;
@@ -822,6 +876,11 @@ class SellerRestaurantProfile {
         'cover_photo',
         'cover_photo_url',
       ]),
+      status: _stringFrom(
+        json['status'] ??
+            json['restaurant_status'] ??
+            json['verification_status'],
+      ),
       restaurantPhone: _stringFrom(json['restaurant_phone'] ?? json['phone']),
       restaurantEmail: _stringFrom(json['restaurant_email'] ?? json['email']),
       restaurantAddress: _stringFrom(

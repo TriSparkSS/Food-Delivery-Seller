@@ -33,6 +33,55 @@ class SellerDashboardScreen extends StatefulWidget {
 
 class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   SellerDashboardTab _tab = SellerDashboardTab.dashboard;
+  String? _restaurantName;
+  String? _restaurantLogo;
+  bool _loadingRestaurant = false;
+
+  String get _displayRestaurantName {
+    final fetchedName = _restaurantName?.trim();
+    if (fetchedName != null && fetchedName.isNotEmpty) return fetchedName;
+    return widget.restaurantName;
+  }
+
+  String get _displayInitials => _restaurantInitials(_displayRestaurantName);
+
+  @override
+  void initState() {
+    super.initState();
+    _restaurantName = widget.restaurantName;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRestaurant();
+    });
+  }
+
+  Future<void> _loadRestaurant() async {
+    if (_loadingRestaurant) return;
+
+    setState(() => _loadingRestaurant = true);
+    try {
+      final token = await widget.tokenStorage.loadToken();
+      final tokenType = await widget.tokenStorage.loadTokenType();
+      if (token == null || token.trim().isEmpty) return;
+
+      final restaurant = await widget.authApi.fetchRestaurant(
+        token: token,
+        tokenType: tokenType,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        final restaurantName = restaurant.restaurantName?.trim();
+        if (restaurantName != null && restaurantName.isNotEmpty) {
+          _restaurantName = restaurantName;
+        }
+        _restaurantLogo = _publicImageUrl(restaurant.restaurantLogo);
+      });
+    } on SellerAuthException {
+      // Keep the dashboard usable with the values passed by the auth flow.
+    } finally {
+      if (mounted) setState(() => _loadingRestaurant = false);
+    }
+  }
 
   void _openAddProduct() {
     Navigator.of(context).push(
@@ -45,15 +94,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final palette = Theme.of(context).extension<AuthPalette>()!;
     final body = switch (_tab) {
       SellerDashboardTab.dashboard => SellerDashboardHome(
-        restaurantName: widget.restaurantName,
-        initials: widget.initials,
+        restaurantName: _displayRestaurantName,
+        initials: _displayInitials,
+        logoUrl: _restaurantLogo,
       ),
       SellerDashboardTab.orders => const SellerOrdersScreen(),
       SellerDashboardTab.menu => const SellerMenuScreen(),
       SellerDashboardTab.settings => SellerSettingsScreen(
         authApi: widget.authApi,
         tokenStorage: widget.tokenStorage,
-        restaurantName: widget.restaurantName,
+        restaurantName: _displayRestaurantName,
         onLoggedOut: widget.onLoggedOut,
       ),
     };
@@ -881,4 +931,23 @@ class _VariantChip extends StatelessWidget {
       ),
     );
   }
+}
+
+String _restaurantInitials(String restaurantName) {
+  final words = restaurantName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .toList(growable: false);
+  if (words.isEmpty) return 'S';
+  return words.map((word) => word[0]).join().toUpperCase();
+}
+
+String? _publicImageUrl(String? value) {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) return null;
+  final uri = Uri.tryParse(text);
+  if (uri != null && uri.hasScheme) return text;
+  if (text.startsWith('/')) return 'https://restro.devhimanshu.com$text';
+  return 'https://restro.devhimanshu.com/$text';
 }

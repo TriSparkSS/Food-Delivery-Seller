@@ -8,11 +8,13 @@ class SellerDashboardHome extends StatelessWidget {
   const SellerDashboardHome({
     required this.restaurantName,
     required this.initials,
+    this.logoUrl,
     super.key,
   });
 
   final String restaurantName;
   final String initials;
+  final String? logoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -20,30 +22,15 @@ class SellerDashboardHome extends StatelessWidget {
 
     return SellerWorkScaffold(
       title: '$restaurantName 🌿',
-      subtitle: 'Good morning,',
+      subtitle: '${_dashboardGreeting()},',
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SellerHeaderIcon(Icons.notifications_rounded),
           const SizedBox(width: 12),
-          Container(
-            width: 52,
-            height: 52,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: palette.greenDark,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                height: 1,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0,
-              ),
-            ),
+          _RestaurantHeaderLogo(
+            logoUrl: logoUrl,
+            initials: initials,
           ),
         ],
       ),
@@ -154,6 +141,62 @@ class SellerDashboardHome extends StatelessWidget {
           const _PopularItemsCard(),
         ],
       ),
+    );
+  }
+}
+
+class _RestaurantHeaderLogo extends StatelessWidget {
+  const _RestaurantHeaderLogo({
+    required this.logoUrl,
+    required this.initials,
+  });
+
+  final String? logoUrl;
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+    final imageUrl = logoUrl;
+
+    return Container(
+      width: 52,
+      height: 52,
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: palette.greenDark,
+        shape: BoxShape.circle,
+      ),
+      child: imageUrl == null
+          ? Text(
+              initials,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                height: 1,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
+            )
+          : Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              errorBuilder: (context, error, stackTrace) {
+                return Text(
+                  initials,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    height: 1,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                );
+              },
+            ),
     );
   }
 }
@@ -433,4 +476,11 @@ class _PopularItem extends StatelessWidget {
       ],
     );
   }
+}
+
+String _dashboardGreeting() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }

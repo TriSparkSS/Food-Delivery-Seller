@@ -37,7 +37,6 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   bool _deletingAccount = false;
   bool _loadingStoreSummary = false;
   SellerRestaurantProfile? _settingsRestaurant;
-  SellerVerificationStatusResponse? _settingsVerificationStatus;
 
   @override
   void initState() {
@@ -61,15 +60,10 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
         token: token,
         tokenType: tokenType,
       );
-      final verification = await widget.authApi.fetchVerificationStatus(
-        token: token,
-        tokenType: tokenType,
-      );
 
       if (!mounted) return;
       setState(() {
         _settingsRestaurant = restaurant;
-        _settingsVerificationStatus = verification;
       });
     } on SellerAuthException catch (error) {
       if (mounted) _showSettingsMessage(error.message, error: true);
@@ -181,9 +175,8 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
     final restaurant = _settingsRestaurant;
-    final status = _settingsVerificationStatus;
-    final statusColor = _settingsStatusColor(status, palette);
-    final statusLabel = _settingsStatusLabel(status);
+    final statusColor = _settingsStatusColor(restaurant?.status, palette);
+    final statusLabel = _settingsStatusLabel(restaurant?.status);
     final storeName =
     restaurant?.restaurantName?.trim().isNotEmpty == true
         ? restaurant!.restaurantName!.trim()
@@ -447,21 +440,47 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   }
 }
 
-Color _settingsStatusColor(
-    SellerVerificationStatusResponse? status,
-    AuthPalette palette,
-    ) {
-  if (status == null) return palette.mutedText;
-  if (status.isApproved) return palette.greenDark;
-  if (status.isFailed) return const Color(0xFFFF4338);
+Color _settingsStatusColor(String? status, AuthPalette palette) {
+  final value = _normalizeSettingsStatus(status);
+  if (value.isEmpty) return palette.mutedText;
+  if (value == 'approved' || value == 'verified' || value == 'active') {
+    return palette.greenDark;
+  }
+  if (value == 'failed' ||
+      value == 'rejected' ||
+      value == 'declined' ||
+      value == 'denied' ||
+      value == 'expired' ||
+      value == 'cancelled' ||
+      value == 'canceled') {
+    return const Color(0xFFFF4338);
+  }
   return const Color(0xFFFF9F0A);
 }
 
-String _settingsStatusLabel(SellerVerificationStatusResponse? status) {
-  if (status == null) return 'Checking status';
-  if (status.isApproved) return '✓ ${status.statusLabel}';
-  if (status.isFailed) return status.statusLabel;
-  return status.statusLabel;
+String _settingsStatusLabel(String? status) {
+  final label = _settingsStatusText(status);
+  final value = _normalizeSettingsStatus(status);
+  if (value == 'approved' || value == 'verified' || value == 'active') {
+    return '✓ $label';
+  }
+  return label;
+}
+
+String _settingsStatusText(String? status) {
+  final text = status?.trim().replaceAll(RegExp(r'[_-]+'), ' ') ?? '';
+  if (text.isEmpty) return 'Checking status';
+  return text
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map((word) {
+        return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+      })
+      .join(' ');
+}
+
+String _normalizeSettingsStatus(String? status) {
+  return status?.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_') ?? '';
 }
 
 class _SettingsStoreLogo extends StatelessWidget {
