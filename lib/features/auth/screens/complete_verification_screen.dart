@@ -132,50 +132,54 @@ class _CompleteVerificationScreenState
                     'Verification Status',
                     style: TextStyle(
                       color: palette.text,
-                      fontSize: 28,
+                      fontSize: 22,
                       height: 1.05,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
-                    'Didit and Restaurant Review',
+                    'Identity & restaurant review progress',
                     style: TextStyle(
                       color: palette.mutedText,
-                      fontSize: 15,
-                      height: 1.2,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0,
+                      fontSize: 13,
+                      height: 1.25,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   Center(
-                    child: Image.asset(
-                      'assets/images/app_logo.png',
-                      color: Colors.green,
-                      height: 150,
-                      width: 150,
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: palette.softGreen.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Image.asset(
+                        'assets/images/app_logo.png',
+                        color: palette.greenDark,
+                        height: 72,
+                        width: 72,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   _DualStatusCard(
                     diditStatus: verification?.status ?? statusValue,
                     restaurantStatus: restaurantStatusValue,
                     diditTone: tone,
                     restaurantTone: restaurantTone,
                   ),
-                  const SizedBox(height: 28),
-                  _SectionTitle('Verification Timeline'),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 22),
+                  _SectionTitle('Timeline'),
+                  const SizedBox(height: 14),
                   _VerificationTimeline(
                     response: verification,
                     tone: tone,
                     restaurantTone: restaurantTone,
                   ),
-                  const SizedBox(height: 28),
-                  _SectionTitle('Verification Scores'),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 22),
+                  _SectionTitle('Scores'),
+                  const SizedBox(height: 12),
                   _ScoreCard(
                     scoreText: faceMatch?.scoreLabel ?? '-',
                     title: 'Face Match',
@@ -308,7 +312,7 @@ class _StatusCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: tone.color,
-              fontSize: 23,
+              fontSize: 18,
               height: 1.1,
               fontWeight: FontWeight.w800,
               letterSpacing: 0,
@@ -320,7 +324,7 @@ class _StatusCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: palette.mutedText,
-              fontSize: 14,
+              fontSize: 12,
               height: 1.25,
               fontWeight: FontWeight.w500,
               letterSpacing: 0,
@@ -385,8 +389,8 @@ class _StatusPill extends StatelessWidget {
     final palette = Theme.of(context).extension<AuthPalette>()!;
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 76),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+      constraints: const BoxConstraints(minHeight: 68),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: tone.softColor.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(16),
@@ -416,7 +420,7 @@ class _StatusPill extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: palette.mutedText,
-                    fontSize: 12,
+                    fontSize: 11,
                     height: 1.1,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0,
@@ -429,7 +433,7 @@ class _StatusPill extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: tone.color,
-                    fontSize: 13,
+                    fontSize: 12,
                     height: 1.1,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0,
@@ -519,8 +523,8 @@ class _SlideToDashboardButtonState extends State<_SlideToDashboardButton> {
                     'Slide to Dashboard',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                       letterSpacing: 0,
                     ),
                   ),
@@ -564,7 +568,7 @@ class _SectionTitle extends StatelessWidget {
       text,
       style: TextStyle(
         color: palette.text.withValues(alpha: 0.82),
-        fontSize: 17,
+        fontSize: 14,
         height: 1.1,
         fontWeight: FontWeight.w700,
         letterSpacing: 0,
@@ -714,21 +718,19 @@ class _TimelineItem extends StatelessWidget {
                     title,
                     style: TextStyle(
                       color: muted ? palette.mutedText : palette.text,
-                      fontSize: 17,
+                      fontSize: 13,
                       height: 1.1,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 5),
                   Text(
                     time,
                     style: TextStyle(
                       color: palette.mutedText,
-                      fontSize: 14,
+                      fontSize: 11,
                       height: 1.1,
                       fontWeight: FontWeight.w500,
-                      letterSpacing: 0,
                     ),
                   ),
                 ],
@@ -784,7 +786,7 @@ class _ScoreCard extends StatelessWidget {
                   subtitle,
                   style: TextStyle(
                     color: highlightedSubtitle ? accentColor : palette.mutedText,
-                    fontSize: 14,
+                    fontSize: 12,
                     height: 1.15,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0,
@@ -808,8 +810,8 @@ class _ScoreCircle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 68,
-      height: 68,
+      width: 56,
+      height: 56,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -825,7 +827,7 @@ class _ScoreCircle extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: accentColor,
-              fontSize: 24,
+              fontSize: 18,
               height: 1,
               fontWeight: FontWeight.w800,
               letterSpacing: 0,

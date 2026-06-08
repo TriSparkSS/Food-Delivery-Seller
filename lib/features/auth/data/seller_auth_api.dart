@@ -234,11 +234,102 @@ class SellerAuthResult {
   final Map<String, Object?>? data;
 }
 
+class SellerBusinessHour {
+  const SellerBusinessHour({
+    required this.dayOfWeek,
+    this.openingTime,
+    this.closingTime,
+    this.isClosed = false,
+    this.is24Hours = false,
+  });
+
+  final int dayOfWeek;
+  final String? openingTime;
+  final String? closingTime;
+  final bool isClosed;
+  final bool is24Hours;
+
+  factory SellerBusinessHour.fromJson(Map<String, Object?> json) {
+    return SellerBusinessHour(
+      dayOfWeek: _intFrom(json['day_of_week']) ?? 1,
+      openingTime: _stringFrom(json['opening_time']),
+      closingTime: _stringFrom(json['closing_time']),
+      isClosed: _boolFrom(json['is_closed']),
+      is24Hours: _boolFrom(json['is_24_hours']),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'day_of_week': dayOfWeek,
+      'opening_time': openingTime ?? '',
+      'closing_time': closingTime ?? '',
+      'is_closed': isClosed,
+      'is_24_hours': is24Hours,
+    };
+  }
+
+  static List<SellerBusinessHour> listFromJson(Map<String, Object?> json) {
+    final data = _mapFrom(json['data']);
+    Object? raw = data['business_hours'];
+    if (raw == null) {
+      final restaurant = _mapFrom(data['restaurant']);
+      raw = restaurant['business_hours'];
+    }
+    raw ??= json['business_hours'];
+
+    final items = _listFrom(raw);
+    final parsed = items
+        .where((item) => item != null)
+        .map(_mapFrom)
+        .where((item) => item.isNotEmpty)
+        .map(SellerBusinessHour.fromJson)
+        .toList(growable: false);
+
+    if (parsed.isNotEmpty) return parsed;
+    return SellerBusinessHour.defaultWeek();
+  }
+
+  static List<SellerBusinessHour> defaultWeek() {
+    return List<SellerBusinessHour>.generate(7, (index) {
+      final day = index + 1;
+      return SellerBusinessHour(
+        dayOfWeek: day,
+        openingTime: '09:00',
+        closingTime: '23:00',
+        isClosed: day == 7,
+        is24Hours: false,
+      );
+    }, growable: false);
+  }
+}
+
+class SellerBusinessHoursUpdateRequest {
+  const SellerBusinessHoursUpdateRequest({required this.businessHours});
+
+  final List<SellerBusinessHour> businessHours;
+
+  Map<String, Object?> toJson() {
+    return {
+      'business_hours': businessHours.map((hour) => hour.toJson()).toList(),
+    };
+  }
+}
+
 class SellerCuisine {
-  const SellerCuisine({required this.id, required this.translatedName});
+  const SellerCuisine({
+    required this.id,
+    required this.translatedName,
+    this.imagePath,
+    this.imageUrl,
+    this.status = true,
+  });
 
   final int? id;
   final String translatedName;
+  final String? imagePath;
+  final String? imageUrl;
+  final bool status;
 
   factory SellerCuisine.fromJson(Map<String, Object?> json) {
     final name = _mapFrom(json['name']);
@@ -246,6 +337,9 @@ class SellerCuisine {
 
     return SellerCuisine(
       id: id,
+      imagePath: _stringFrom(json['image_path']),
+      imageUrl: _stringFrom(json['image_url']),
+      status: _boolFrom(json['status']),
       translatedName:
           _stringFrom(json['translated_name']) ??
           _stringFrom(name['en']) ??
@@ -263,6 +357,113 @@ class SellerCuisine {
         .map(_mapFrom)
         .where((item) => item.isNotEmpty)
         .map(SellerCuisine.fromJson)
+        .toList(growable: false);
+  }
+}
+
+class SellerMenuRequest {
+  const SellerMenuRequest({
+    required this.translatedName,
+    this.cuisineId,
+    this.imagePath,
+    this.status,
+    this.productIds,
+    this.availabilitySchedules,
+  });
+
+  final String translatedName;
+  final int? cuisineId;
+  final String? imagePath;
+  final bool? status;
+  final String? productIds;
+  final String? availabilitySchedules;
+
+  Map<String, String> toMultipartFields({bool includeStatus = false}) {
+    final fields = <String, String>{
+      'translated_name': translatedName.trim(),
+    };
+
+    if (cuisineId != null) {
+      fields['cuisine_id'] = cuisineId.toString();
+    }
+
+    if (includeStatus && status != null) {
+      fields['status'] = status! ? '1' : '0';
+    }
+
+    return fields;
+  }
+
+  Map<String, String> toMultipartFiles() {
+    final path = imagePath?.trim();
+    if (path == null || path.isEmpty || path.startsWith('http')) {
+      return const {};
+    }
+    return {'image': path};
+  }
+}
+
+class SellerMenu {
+  const SellerMenu({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.status,
+    this.translatedName,
+    this.image,
+    this.cuisineId,
+  });
+
+  final int? id;
+  final String name;
+  final String description;
+  final bool status;
+  final String? translatedName;
+  final String? image;
+  final int? cuisineId;
+
+  String get displayName {
+    final translated = translatedName?.trim();
+    if (translated != null && translated.isNotEmpty) return translated;
+    return name;
+  }
+
+  factory SellerMenu.fromResponseJson(Map<String, Object?> json) {
+    final data = _mapFrom(json['data']);
+    final nestedMenu = _mapFrom(data['menu']);
+    final source = nestedMenu.isNotEmpty
+        ? nestedMenu
+        : data.isEmpty
+        ? json
+        : data;
+    return SellerMenu.fromJson(source);
+  }
+
+  factory SellerMenu.fromJson(Map<String, Object?> json) {
+    final translatedName = _stringFrom(json['translated_name']);
+    return SellerMenu(
+      id: _intFrom(json['id'] ?? json['menu_id']),
+      name: _stringFrom(json['name']) ?? translatedName ?? 'Menu list',
+      translatedName: translatedName,
+      description: _stringFrom(json['description']) ?? '',
+      status: json['status'] == null ? true : _boolFrom(json['status']),
+      image: resolveSellerMediaUrl(
+            _stringFrom(json['image_url']) ??
+            _stringFrom(json['image_path']),
+      ),
+      cuisineId: _intFrom(json['cuisine_id']),
+    );
+  }
+
+  static List<SellerMenu> listFromJson(Map<String, Object?> json) {
+    final data = _mapFrom(json['data']);
+    final rawItems = _listFrom(data['items']);
+
+    return rawItems
+        .where((item) => item != null)
+        .map(_mapFrom)
+        .where((item) => item.isNotEmpty)
+        .map(SellerMenu.fromJson)
         .toList(growable: false);
   }
 }
@@ -957,6 +1158,33 @@ abstract class SellerAuthApi {
     int perPage = 15,
   });
 
+  Future<List<SellerMenu>> fetchMenus({
+    required String token,
+    String tokenType = 'Bearer',
+    int? cuisineId,
+    int page = 1,
+    int perPage = 15,
+  });
+
+  Future<SellerMenu> createMenu(
+    SellerMenuRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
+  Future<SellerMenu> updateMenu(
+    int menuId,
+    SellerMenuRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
+  Future<SellerAuthResult> deleteMenu({
+    required int menuId,
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
   Future<SellerProfile> updateProfile(
     SellerProfileUpdateRequest request, {
     required String token,
@@ -970,6 +1198,17 @@ abstract class SellerAuthApi {
 
   Future<SellerAuthResult> submitRestaurant(
     SellerRestaurantRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
+  Future<List<SellerBusinessHour>> fetchBusinessHours({
+    required String token,
+    String tokenType = 'Bearer',
+  });
+
+  Future<SellerAuthResult> updateBusinessHours(
+    SellerBusinessHoursUpdateRequest request, {
     required String token,
     String tokenType = 'Bearer',
   });
@@ -997,7 +1236,9 @@ class NetworkSellerAuthApi implements SellerAuthApi {
     this.mePath = 'https://restro.devhimanshu.com/api/v1/seller/auth/me',
     this.profileUpdatePath = '/auth/me/update',
     this.cuisinesPath = '/auth/cuisines',
+    this.menusPath = '/auth/menus',
     this.restaurantPath = '/auth/restaurant',
+    this.businessHoursPath = '/auth/restaurant/business-hours',
     this.logoutPath = '/auth/logout',
     this.deleteAccountPath = '/auth/delete/account',
   });
@@ -1012,7 +1253,9 @@ class NetworkSellerAuthApi implements SellerAuthApi {
   final String mePath;
   final String profileUpdatePath;
   final String cuisinesPath;
+  final String menusPath;
   final String restaurantPath;
+  final String businessHoursPath;
   final String logoutPath;
   final String deleteAccountPath;
 
@@ -1104,6 +1347,76 @@ class NetworkSellerAuthApi implements SellerAuthApi {
   }
 
   @override
+  Future<List<SellerMenu>> fetchMenus({
+    required String token,
+    String tokenType = 'Bearer',
+    int? cuisineId,
+    int page = 1,
+    int perPage = 15,
+  }) async {
+    final query = <String>[
+      'page=$page',
+      'per_page=$perPage',
+    ];
+    if (cuisineId != null) {
+      query.add('cuisine_id=$cuisineId');
+    }
+
+    final result = await _get(
+      '$menusPath?${query.join('&')}',
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+    return SellerMenu.listFromJson(result.data ?? const {});
+  }
+
+  @override
+  Future<SellerMenu> createMenu(
+    SellerMenuRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    final result = await _postMultipart(
+      menusPath,
+      request.toMultipartFields(),
+      files: request.toMultipartFiles(),
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+    return SellerMenu.fromResponseJson(result.data ?? const {});
+  }
+
+  @override
+  Future<SellerMenu> updateMenu(
+    int menuId,
+    SellerMenuRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    final result = await _postMultipart(
+      '$menusPath/$menuId',
+      request.toMultipartFields(includeStatus: true),
+      files: request.toMultipartFiles(),
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+    return SellerMenu.fromResponseJson(result.data ?? const {});
+  }
+
+  @override
+  Future<SellerAuthResult> deleteMenu({
+    required int menuId,
+    required String token,
+    String tokenType = 'Bearer',
+  }) {
+    return _delete(
+      '$menusPath/$menuId',
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+  }
+
+  @override
   Future<SellerProfile> updateProfile(
     SellerProfileUpdateRequest request, {
     required String token,
@@ -1142,6 +1455,33 @@ class NetworkSellerAuthApi implements SellerAuthApi {
       restaurantPath,
       request.toMultipartFields(),
       files: request.toMultipartFiles(),
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+  }
+
+  @override
+  Future<List<SellerBusinessHour>> fetchBusinessHours({
+    required String token,
+    String tokenType = 'Bearer',
+  }) async {
+    final result = await _get(
+      businessHoursPath,
+      bearerToken: token,
+      tokenType: tokenType,
+    );
+    return SellerBusinessHour.listFromJson(result.data ?? const {});
+  }
+
+  @override
+  Future<SellerAuthResult> updateBusinessHours(
+    SellerBusinessHoursUpdateRequest request, {
+    required String token,
+    String tokenType = 'Bearer',
+  }) {
+    return _put(
+      businessHoursPath,
+      request.toJson(),
       bearerToken: token,
       tokenType: tokenType,
     );
@@ -1270,6 +1610,92 @@ class NetworkSellerAuthApi implements SellerAuthApi {
           message: 'Request completed successfully',
         );
       }
+      throw const SellerAuthException(
+        'Server closed the request. Please try again.',
+      );
+    } on FormatException {
+      throw const SellerAuthException('Invalid response from server.');
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<SellerAuthResult> _put(
+    String path,
+    Map<String, Object?> payload, {
+    required String bearerToken,
+    String tokenType = 'Bearer',
+  }) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 20);
+    client.idleTimeout = const Duration(seconds: 5);
+
+    try {
+      final request = await client
+          .putUrl(_uri(path))
+          .timeout(const Duration(seconds: 20));
+      request.headers.contentType = ContentType.json;
+      request.headers.set(HttpHeaders.acceptHeader, ContentType.json.value);
+      request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
+      request.headers.set(HttpHeaders.connectionHeader, 'close');
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        '$tokenType $bearerToken',
+      );
+      request.write(jsonEncode(payload));
+
+      final response = await request.close().timeout(
+        const Duration(seconds: 30),
+      );
+      return _readResponse(response);
+    } on SellerAuthException {
+      rethrow;
+    } on TimeoutException {
+      throw const SellerAuthException('Request timed out. Please try again.');
+    } on SocketException {
+      throw const SellerAuthException('Network error. Check your connection.');
+    } on HttpException {
+      throw const SellerAuthException(
+        'Server closed the request. Please try again.',
+      );
+    } on FormatException {
+      throw const SellerAuthException('Invalid response from server.');
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<SellerAuthResult> _delete(
+    String path, {
+    required String bearerToken,
+    String tokenType = 'Bearer',
+  }) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 20);
+    client.idleTimeout = const Duration(seconds: 5);
+
+    try {
+      final request = await client
+          .deleteUrl(_uri(path))
+          .timeout(const Duration(seconds: 20));
+      request.headers.set(HttpHeaders.acceptHeader, ContentType.json.value);
+      request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
+      request.headers.set(HttpHeaders.connectionHeader, 'close');
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        '$tokenType $bearerToken',
+      );
+
+      return _readResponse(
+        await request.close().timeout(const Duration(seconds: 30)),
+      );
+    } on SellerAuthException {
+      rethrow;
+    } on TimeoutException {
+      throw const SellerAuthException('Request timed out. Please try again.');
+    } on SocketException {
+      throw const SellerAuthException('Network error. Check your connection.');
+    } on HttpException {
       throw const SellerAuthException(
         'Server closed the request. Please try again.',
       );
@@ -1697,4 +2123,24 @@ bool _boolFrom(Object? value) {
 double? _doubleFrom(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '');
+}
+
+const sellerMediaBaseUrl = 'https://restro.devhimanshu.com';
+
+String? resolveSellerMediaUrl(String? value) {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) return null;
+
+  final uri = Uri.tryParse(text);
+  if (uri != null && uri.hasScheme) {
+    if (uri.host == 'localhost' || uri.host == '127.0.0.1') {
+      return uri
+          .replace(scheme: 'https', host: 'restro.devhimanshu.com')
+          .toString();
+    }
+    return text;
+  }
+
+  if (text.startsWith('/')) return '$sellerMediaBaseUrl$text';
+  return '$sellerMediaBaseUrl/$text';
 }

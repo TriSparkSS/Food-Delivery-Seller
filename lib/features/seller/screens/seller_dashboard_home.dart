@@ -37,108 +37,122 @@ class SellerDashboardHome extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final gap = constraints.maxWidth < 360 ? 8.0 : 12.0;
+          SellerEntrance(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final gap = constraints.maxWidth < 360 ? 8.0 : 12.0;
 
-              return Row(
-                children: [
-              Expanded(
-                child: const _MetricCard(
-                  icon: '📦',
-                  value: '47',
-                  label: 'Orders Today',
-                  accent: Color(0xFF10B981),
-                ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                child: const _MetricCard(
-                  icon: '💰',
-                  value: r'$1,284',
-                  label: 'Revenue',
-                  accent: Color(0xFF3B82F6),
-                ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                child: const _MetricCard(
-                  icon: '⭐',
-                  value: '4.8',
-                  label: 'Rating',
-                  accent: Color(0xFFFF9F0A),
-                ),
-              ),
-            ],
-              );
-            },
-          ),
-          const SizedBox(height: 18),
-          SellerCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SellerSectionTitle('Order Status'),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: const [
-                    _StatusPill(
-                      icon: '⌛',
-                      label: 'Pending 5',
-                      color: Color(0xFFFF9F0A),
-                      background: Color(0xFFFFF1D8),
-                    ),
-                    _StatusPill(
-                      icon: '🔥',
-                      label: 'Preparing 8',
-                      color: Color(0xFF4C8DFF),
-                      background: Color(0xFFE6F0FF),
-                    ),
-                    _StatusPill(
-                      icon: '✓',
-                      label: 'Done 32',
-                      color: Color(0xFF069464),
-                      background: Color(0xFFDDF7EF),
-                    ),
-                    _StatusPill(
-                      icon: '×',
-                      label: 'Cancelled 2',
-                      color: Color(0xFFFF4338),
-                      background: Color(0xFFFFE2E4),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          SellerCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
+                return Row(
                   children: [
-                    Expanded(child: SellerSectionTitle('Weekly Revenue')),
-                    Text(
-                      '+18% ↑',
-                      style: TextStyle(
-                        color: palette.greenDark,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0,
+                    const Expanded(
+                      child: _MetricCard(
+                        icon: '📦',
+                        value: '47',
+                        label: 'Orders Today',
+                        accent: Color(0xFF10B981),
+                        trend: '+12%',
+                      ),
+                    ),
+                    SizedBox(width: gap),
+                    const Expanded(
+                      child: _MetricCard(
+                        icon: '💰',
+                        value: r'$1,284',
+                        label: 'Revenue',
+                        accent: Color(0xFF3B82F6),
+                        trend: '+18%',
+                      ),
+                    ),
+                    SizedBox(width: gap),
+                    const Expanded(
+                      child: _MetricCard(
+                        icon: '⭐',
+                        value: '4.8',
+                        label: 'Rating',
+                        accent: Color(0xFFFF9F0A),
+                        trend: 'Top',
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 16),
-                const _WeeklyBars(),
-              ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 18),
-          const _PopularItemsCard(),
+          SellerEntrance(
+            delay: const Duration(milliseconds: 70),
+            child: SellerCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SellerSectionTitle('Order Status'),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: const [
+                      _StatusPill(
+                        icon: '⌛',
+                        label: 'Pending 5',
+                        color: Color(0xFFFF9F0A),
+                        background: Color(0xFFFFF1D8),
+                      ),
+                      _StatusPill(
+                        icon: '🔥',
+                        label: 'Preparing 8',
+                        color: Color(0xFF4C8DFF),
+                        background: Color(0xFFE6F0FF),
+                      ),
+                      _StatusPill(
+                        icon: '✓',
+                        label: 'Done 32',
+                        color: Color(0xFF069464),
+                        background: Color(0xFFDDF7EF),
+                      ),
+                      _StatusPill(
+                        icon: '×',
+                        label: 'Cancelled 2',
+                        color: Color(0xFFFF4338),
+                        background: Color(0xFFFFE2E4),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          SellerEntrance(
+            delay: const Duration(milliseconds: 120),
+            child: SellerCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: SellerSectionTitle('Weekly Revenue')),
+                      Text(
+                        '+18% ↑',
+                        style: TextStyle(
+                          color: palette.greenDark,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const _WeeklyBars(),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const SellerEntrance(
+            delay: Duration(milliseconds: 170),
+            child: _PopularItemsCard(),
+          ),
         ],
       ),
     );
@@ -207,12 +221,14 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     required this.label,
     required this.accent,
+    required this.trend,
   });
 
   final String icon;
   final String value;
   final String label;
   final Color accent;
+  final String trend;
 
   @override
   Widget build(BuildContext context) {
@@ -245,6 +261,16 @@ class _MetricCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: accent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        trend,
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 10,
+                          height: 1,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
                       ),
                     ),
                   ),
@@ -330,50 +356,79 @@ class _WeeklyBars extends StatelessWidget {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const values = [0.52, 0.72, 0.46, 0.92, 0.79, 1.0, 0.65];
 
-    return SizedBox(
-      height: 132,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(days.length, (index) {
-          final active = days[index] == 'Sat';
-          return Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: FractionallySizedBox(
-                      heightFactor: values[index],
-                      widthFactor: 0.78,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: active
-                              ? palette.greenDark
-                              : const Color(0xFF08956A),
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(5),
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 720),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return SizedBox(
+          height: 132,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(days.length, (index) {
+              final active = days[index] == 'Sat';
+              final animatedValue = values[index] * value;
+
+              return Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: FractionallySizedBox(
+                          heightFactor: animatedValue
+                              .clamp(0.04, 1.0)
+                              .toDouble(),
+                          widthFactor: active ? 0.84 : 0.74,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: active
+                                    ? [palette.green, palette.greenDark]
+                                    : [
+                                        const Color(0xFF10B981),
+                                        const Color(0xFF078B63),
+                                      ],
+                              ),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(7),
+                              ),
+                              boxShadow: active
+                                  ? [
+                                      BoxShadow(
+                                        color: palette.greenDark.withValues(
+                                          alpha: 0.18,
+                                        ),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 9),
+                    Text(
+                      days[index],
+                      style: TextStyle(
+                        color: active ? palette.greenDark : palette.mutedText,
+                        fontSize: 12,
+                        fontWeight: active ? FontWeight.w800 : FontWeight.w500,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 9),
-                Text(
-                  days[index],
-                  style: TextStyle(
-                    color: active ? palette.greenDark : palette.mutedText,
-                    fontSize: 12,
-                    fontWeight: active ? FontWeight.w800 : FontWeight.w500,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ),
+              );
+            }),
+          ),
+        );
+      },
     );
   }
 }

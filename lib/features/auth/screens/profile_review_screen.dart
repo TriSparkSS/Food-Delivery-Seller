@@ -17,6 +17,7 @@ class ProfileReviewScreen extends StatefulWidget {
     this.profile,
     this.onBack,
     this.onLoggedOut,
+    this.readOnly = false,
     super.key,
   });
 
@@ -25,6 +26,7 @@ class ProfileReviewScreen extends StatefulWidget {
   final SellerProfile? profile;
   final VoidCallback? onBack;
   final VoidCallback? onLoggedOut;
+  final bool readOnly;
 
   @override
   State<ProfileReviewScreen> createState() => _ProfileReviewScreenState();
@@ -281,7 +283,11 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                     height: 42,
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: BackTextButton(onPressed: _closeApplication),
+                      child: BackTextButton(
+                        onPressed: widget.readOnly
+                            ? () => Navigator.maybePop(context)
+                            : _closeApplication,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -298,7 +304,9 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Review and update your seller information',
+                    widget.readOnly
+                        ? 'Your seller profile information'
+                        : 'Review and update your seller information',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: palette.mutedText,
@@ -313,7 +321,8 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                     imageUrl: profileImageUrl,
                     localImagePath: _selectedProfilePhotoPath,
                     loading: _pickingProfileImage,
-                    onTap: _pickProfilePhoto,
+                    onTap: widget.readOnly ? () {} : _pickProfilePhoto,
+                    readOnly: widget.readOnly,
                   ),
                   if (_loadingProfile) ...[
                     const SizedBox(height: 18),
@@ -334,10 +343,12 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                     label: 'FULL NAME',
                     controller: _fullNameController,
                     hintText: 'Enter full name',
+                    readOnly: widget.readOnly,
                   ),
                   _DateOfBirthField(
                     value: _formatDate(_dateOfBirth),
-                    onTap: _pickDateOfBirth,
+                    onTap: widget.readOnly ? () {} : _pickDateOfBirth,
+                    readOnly: widget.readOnly,
                   ),
                   _DocumentImagesSection(images: documentImages),
                   _EditableProfileField(
@@ -347,6 +358,7 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                     hintText: 'Enter address',
                     minLines: 2,
                     maxLines: 3,
+                    readOnly: widget.readOnly,
                   ),
                   _PhoneProfileField(
                     controller: _phoneController,
@@ -359,59 +371,62 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
                     controller: _emailController,
                     hintText: 'Enter email address',
                     keyboardType: TextInputType.emailAddress,
+                    readOnly: widget.readOnly,
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'You can continue after checking these details.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: palette.mutedText,
-                      fontSize: 13,
-                      height: 1.35,
-                      fontWeight: FontWeight.w400,
+                  if (!widget.readOnly) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'You can continue after checking these details.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: palette.mutedText,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    height: 52,
-                    child: FilledButton(
-                      onPressed: _savingProfile ? null : _submitProfile,
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: _savingProfile ? null : _submitProfile,
                       style: FilledButton.styleFrom(
                         backgroundColor: palette.green,
                         foregroundColor: Colors.white,
                         disabledBackgroundColor:
-                            palette.green.withValues(alpha: 0.55),
+                        palette.green.withValues(alpha: 0.55),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                       child: _savingProfile
                           ? const SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.3,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
+                        dimension: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.3,
+                          valueColor:
+                          AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
                           : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Save & Continue',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Icon(Icons.arrow_forward_rounded, size: 17),
-                              ],
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Save & Continue',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0,
                             ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_rounded, size: 17),
+                        ],
+                      ),
                     ),
                   ),
+                  ],
                 ],
               ),
             ),
@@ -443,12 +458,14 @@ class _SellerProfileImage extends StatelessWidget {
     required this.localImagePath,
     required this.loading,
     required this.onTap,
+    this.readOnly = false,
   });
 
   final String? imageUrl;
   final String? localImagePath;
   final bool loading;
   final VoidCallback onTap;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -457,7 +474,7 @@ class _SellerProfileImage extends StatelessWidget {
 
     return Center(
       child: GestureDetector(
-        onTap: loading ? null : onTap,
+        onTap: readOnly || loading ? null : onTap,
         child: Stack(
           alignment: Alignment.bottomRight,
           children: [
@@ -481,31 +498,32 @@ class _SellerProfileImage extends StatelessWidget {
                 ),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                color: palette.green,
-                shape: BoxShape.circle,
-                border: Border.all(color: palette.screen, width: 2),
+            if (!readOnly)
+              Container(
+                decoration: BoxDecoration(
+                  color: palette.green,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: palette.screen, width: 2),
+                ),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: palette.green,
+                  child: loading
+                      ? const SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                      AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                      : const Icon(
+                    Icons.photo_camera_outlined,
+                    size: 15,
+                    color: Colors.white,
+                  ),
+                ),
               ),
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: palette.green,
-                child: loading
-                    ? const SizedBox.square(
-                        dimension: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Icon(
-                        Icons.photo_camera_outlined,
-                        size: 15,
-                        color: Colors.white,
-                      ),
-              ),
-            ),
           ],
         ),
       ),
@@ -565,10 +583,15 @@ class _ProfileImageContent extends StatelessWidget {
 }
 
 class _DateOfBirthField extends StatelessWidget {
-  const _DateOfBirthField({required this.value, required this.onTap});
+  const _DateOfBirthField({
+    required this.value,
+    required this.onTap,
+    this.readOnly = false,
+  });
 
   final String value;
   final VoidCallback onTap;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -586,7 +609,7 @@ class _DateOfBirthField extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           InkWell(
-            onTap: onTap,
+            onTap: readOnly ? null : onTap,
             borderRadius: BorderRadius.circular(12),
             child: Container(
               constraints: const BoxConstraints(minHeight: 46),
@@ -844,6 +867,7 @@ class _EditableProfileField extends StatelessWidget {
     this.keyboardType,
     this.minLines = 1,
     this.maxLines = 1,
+    this.readOnly = false,
   });
 
   final IconData icon;
@@ -853,6 +877,7 @@ class _EditableProfileField extends StatelessWidget {
   final TextInputType? keyboardType;
   final int minLines;
   final int maxLines;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -889,6 +914,7 @@ class _EditableProfileField extends StatelessWidget {
                     keyboardType: keyboardType,
                     minLines: minLines,
                     maxLines: maxLines,
+                    readOnly: readOnly,
                     style: TextStyle(
                       color: palette.text,
                       fontSize: 14,
@@ -981,14 +1007,14 @@ _ParsedPhoneNumber _parsePhoneNumber(String? phoneNumber) {
   final country = authPhoneCountries
       .where((item) => raw.startsWith(item.dialCode))
       .fold<PhoneCountry?>(
-        null,
+    null,
         (selected, item) {
-          if (selected == null) return item;
-          return item.dialCode.length > selected.dialCode.length
-              ? item
-              : selected;
-        },
-      ) ??
+      if (selected == null) return item;
+      return item.dialCode.length > selected.dialCode.length
+          ? item
+          : selected;
+    },
+  ) ??
       PhoneCountry.india;
   final localNumber = raw.startsWith(country.dialCode)
       ? raw.substring(country.dialCode.length)

@@ -31,7 +31,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   @override
   void initState() {
     super.initState();
-    _status = widget.initialStatus ?? 'Preparing identity verification';
+    _status = widget.initialStatus ?? 'Verify your identity to continue';
   }
 
   Future<void> _verifyIdentity() async {
@@ -66,7 +66,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ? session.sessionToken
           : session.sdkToken;
 
-      setState(() => _status = 'Opening identity verification');
+      setState(() => _status = 'Opening verification');
       final result = verificationToken.isNotEmpty
           ? await DiditSdk.startVerification(
               verificationToken,
@@ -200,84 +200,191 @@ class _VerificationScreenState extends State<VerificationScreen> {
     final palette = Theme.of(context).extension<AuthPalette>()!;
 
     return Scaffold(
-        backgroundColor: palette.screen,
-        body: DecoratedBox(
-          decoration: BoxDecoration(
-            color: palette.screen,
-            image: const DecorationImage(
-              image: AssetImage(LightAuthTextureBackground.assetPath),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: SafeArea(
+      backgroundColor: palette.screen,
+      body: LightAuthTextureBackground(
+        opacity: 0.08,
+        child: SafeArea(
           child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(
-                  Icons.verified_user_rounded,
-                  color: palette.green,
-                  size: 128,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Identity Verification',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _status,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: palette.mutedText,
-                    fontSize: 15,
-                    height: 1.35,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                FilledButton(
-                  onPressed: _isLoading ? null : _verifyIdentity,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: palette.green,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+            child: AuthEntrance(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 24),
+                  Center(
+                    child: Container(
+                      width: 88,
+                      height: 88,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            palette.green,
+                            palette.greenDark,
+                          ],
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: palette.greenDark.withValues(alpha: 0.22),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.verified_user_rounded,
+                        color: Colors.white,
+                        size: 42,
+                      ),
                     ),
                   ),
-                  child: _isLoading
-                      ? const SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.3,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                  const SizedBox(height: 22),
+                  Text(
+                    'Identity Verification',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Quick and secure — takes about 2 minutes',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: palette.mutedText,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: palette.fieldFill.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: palette.fieldBorder),
+                    ),
+                    child: Column(
+                      children: [
+                        _VerificationStepRow(
+                          icon: Icons.badge_outlined,
+                          text: 'Government ID photo',
+                          palette: palette,
+                        ),
+                        const SizedBox(height: 10),
+                        _VerificationStepRow(
+                          icon: Icons.face_retouching_natural_outlined,
+                          text: 'Selfie liveness check',
+                          palette: palette,
+                        ),
+                        const SizedBox(height: 10),
+                        _VerificationStepRow(
+                          icon: Icons.lock_outline_rounded,
+                          text: 'Encrypted & secure',
+                          palette: palette,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.softGreen.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        if (_isLoading)
+                          SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: palette.greenDark,
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: palette.greenDark,
+                            size: 18,
                           ),
-                        )
-                      : Text(
-                          'Start Verification',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _status,
+                            style: TextStyle(
+                              color: palette.text,
+                              fontSize: 12,
+                              height: 1.3,
+                            ),
                           ),
                         ),
-                ),
-              ],
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  PrimaryAuthButton(
+                    label: 'Start Verification',
+                    loading: _isLoading,
+                    enabled: !_isLoading,
+                    onPressed: _isLoading ? null : _verifyIdentity,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _VerificationStepRow extends StatelessWidget {
+  const _VerificationStepRow({
+    required this.icon,
+    required this.text,
+    required this.palette,
+  });
+
+  final IconData icon;
+  final String text;
+  final AuthPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: palette.softGreen.withValues(alpha: 0.8),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: palette.greenDark, size: 17),
         ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

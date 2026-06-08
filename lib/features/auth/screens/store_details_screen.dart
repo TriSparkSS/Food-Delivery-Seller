@@ -20,6 +20,7 @@ class StoreDetailsScreen extends StatefulWidget {
     required this.tokenStorage,
     this.profile,
     this.onLoggedOut,
+    this.fromSettings = false,
     super.key,
   });
 
@@ -27,6 +28,7 @@ class StoreDetailsScreen extends StatefulWidget {
   final SellerAuthTokenStorage tokenStorage;
   final SellerProfile? profile;
   final VoidCallback? onLoggedOut;
+  final bool fromSettings;
 
   @override
   State<StoreDetailsScreen> createState() => _StoreDetailsScreenState();
@@ -411,6 +413,13 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
       await _saveSubmittedRestaurantStatus(result);
 
       if (!mounted) return;
+      if (widget.fromSettings) {
+        _showMessage(result.message.isNotEmpty
+            ? result.message
+            : 'Store details updated successfully.');
+        Navigator.of(context).pop(true);
+        return;
+      }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
           builder: (context) => CompleteVerificationScreen(
@@ -438,16 +447,16 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
       requiresRestaurantDetails: false,
       status: _stringFromRestaurantResult(result.data, 'status') ?? 'pending',
       verificationStatus:
-          _stringFromRestaurantResult(result.data, 'verification_status') ??
+      _stringFromRestaurantResult(result.data, 'verification_status') ??
           storedStatus.verificationStatus ??
           'approved',
     );
   }
 
   String? _stringFromRestaurantResult(
-    Map<String, Object?>? data,
-    String key,
-  ) {
+      Map<String, Object?>? data,
+      String key,
+      ) {
     Object? value = data?[key];
     if (value == null) {
       final seller = data?['seller'];
@@ -737,22 +746,22 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
                     ),
                     child: _submitting || _loadingRestaurant
                         ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.3,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          )
-                        : const Text(
-                            'Done',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0,
-                            ),
-                          ),
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.3,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
+                      ),
+                    )
+                        : Text(
+                      widget.fromSettings ? 'Save' : 'Done',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -983,10 +992,10 @@ class _StoreAddressSelectionScreenState
   }
 
   void _setPinnedLocation(
-    double latitude,
-    double longitude, {
-    bool move = false,
-  }) {
+      double latitude,
+      double longitude, {
+        bool move = false,
+      }) {
     setState(() {
       _selectedLat = latitude;
       _selectedLng = longitude;
@@ -998,11 +1007,11 @@ class _StoreAddressSelectionScreenState
   }
 
   Future<void> _pinAndResolveLocation(
-    double latitude,
-    double longitude, {
-    bool move = false,
-    bool showSuccess = false,
-  }) async {
+      double latitude,
+      double longitude, {
+        bool move = false,
+        bool showSuccess = false,
+      }) async {
     _setPinnedLocation(latitude, longitude, move: move);
     await _resolveAddressForLocation(
       latitude,
@@ -1012,10 +1021,10 @@ class _StoreAddressSelectionScreenState
   }
 
   Future<void> _resolveAddressForLocation(
-    double latitude,
-    double longitude, {
-    bool showSuccess = false,
-  }) async {
+      double latitude,
+      double longitude, {
+        bool showSuccess = false,
+      }) async {
     final lookupId = ++_addressLookupSerial;
     setState(() => _resolvingAddress = true);
 
@@ -1059,9 +1068,9 @@ class _StoreAddressSelectionScreenState
   }
 
   Future<_ResolvedStoreAddress?> _fetchMapboxResolvedAddress(
-    double latitude,
-    double longitude,
-  ) async {
+      double latitude,
+      double longitude,
+      ) async {
     final uri = Uri.https('api.mapbox.com', '/search/geocode/v6/reverse', {
       'latitude': latitude.toString(),
       'longitude': longitude.toString(),
@@ -1109,9 +1118,9 @@ class _StoreAddressSelectionScreenState
   }
 
   Future<_ResolvedStoreAddress?> _fetchOsmResolvedAddress(
-    double latitude,
-    double longitude,
-  ) async {
+      double latitude,
+      double longitude,
+      ) async {
     final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
       'format': 'jsonv2',
       'lat': latitude.toString(),
@@ -1224,7 +1233,7 @@ class _StoreAddressSelectionScreenState
         final openSettings = await _showLocationActionDialog(
           title: 'Turn on device location',
           message:
-              'Location permission is allowed, but device location is turned off. Turn it on to pin your restaurant.',
+          'Location permission is allowed, but device location is turned off. Turn it on to pin your restaurant.',
           primaryLabel: 'Open Settings',
         );
         if (openSettings == true) {
@@ -1261,7 +1270,7 @@ class _StoreAddressSelectionScreenState
       final shouldRequest = await _showLocationActionDialog(
         title: 'Allow location access',
         message:
-            'We need location permission to pin your restaurant coordinates for delivery.',
+        'We need location permission to pin your restaurant coordinates for delivery.',
         primaryLabel: 'Allow',
       );
       if (shouldRequest != true) return false;
@@ -1274,7 +1283,7 @@ class _StoreAddressSelectionScreenState
       final openSettings = await _showLocationActionDialog(
         title: 'Location permission blocked',
         message:
-            'Location permission is blocked for this app. Open app settings and allow location access.',
+        'Location permission is blocked for this app. Open app settings and allow location access.',
         primaryLabel: 'App Settings',
       );
       if (openSettings == true) {
@@ -1413,14 +1422,21 @@ class _StoreAddressSelectionScreenState
         : Icons.location_searching_rounded;
 
     return Container(
-      height: 218,
+      height: 280,
       decoration: BoxDecoration(
         color: palette.fieldFill,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: hasCoordinates ? palette.green : palette.fieldBorder,
-          width: 1.1,
+          width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: palette.greenDark.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -1544,27 +1560,24 @@ class _StoreAddressSelectionScreenState
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Restaurant Address',
+                  'Pin Your Location',
                   style: TextStyle(
                     color: palette.text,
-                    fontSize: 24,
+                    fontSize: 20,
                     height: 1.1,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
-                  'Add the city, full address, and optional location pin.',
+                  'Tap the map to place your restaurant pin',
                   style: TextStyle(
                     color: palette.mutedText,
-                    fontSize: 14,
-                    height: 1.32,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0,
+                    fontSize: 12,
+                    height: 1.3,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _buildOpenMapPicker(palette),
                 const SizedBox(height: 20),
                 _StoreInput(
@@ -1615,19 +1628,19 @@ class _StoreAddressSelectionScreenState
                             ),
                             child: _locating || _resolvingAddress
                                 ? SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        palette.greenDark,
-                                      ),
-                                    ),
-                                  )
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  palette.greenDark,
+                                ),
+                              ),
+                            )
                                 : Icon(
-                                    Icons.my_location_rounded,
-                                    color: palette.greenDark,
-                                    size: 21,
-                                  ),
+                              Icons.my_location_rounded,
+                              color: palette.greenDark,
+                              size: 21,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -1638,12 +1651,11 @@ class _StoreAddressSelectionScreenState
                                   currentLocationTitle,
                                   style: TextStyle(
                                     color: palette.text,
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    letterSpacing: 0,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 3),
                                 Text(
                                   currentLocationSubtitle,
                                   maxLines: 1,
@@ -1652,9 +1664,8 @@ class _StoreAddressSelectionScreenState
                                     color: hasCoordinates
                                         ? palette.greenDark
                                         : palette.mutedText,
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w500,
-                                    letterSpacing: 0,
                                   ),
                                 ),
                               ],
@@ -1723,9 +1734,8 @@ class _MapStatusChip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: color,
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 0,
               ),
             ),
           ),
@@ -1852,12 +1862,12 @@ class _CoverImagePicker extends StatelessWidget {
                     child: logoImagePath == null
                         ? const Text('🏪', style: TextStyle(fontSize: 21))
                         : _StoreImagePreview(
-                            path: logoImagePath!,
-                            width: 58,
-                            height: 58,
-                            fit: BoxFit.cover,
-                            errorIcon: Icons.storefront_rounded,
-                          ),
+                      path: logoImagePath!,
+                      width: 58,
+                      height: 58,
+                      fit: BoxFit.cover,
+                      errorIcon: Icons.storefront_rounded,
+                    ),
                   ),
                   Positioned(
                     right: -7,
@@ -1900,10 +1910,10 @@ class _StoreImagePreview extends StatelessWidget {
     final isNetwork = path.startsWith('http://') || path.startsWith('https://');
 
     Widget errorBuilder(
-      BuildContext context,
-      Object error,
-      StackTrace? stackTrace,
-    ) {
+        BuildContext context,
+        Object error,
+        StackTrace? stackTrace,
+        ) {
       return Center(
         child: Icon(errorIcon, color: palette.mutedText, size: 28),
       );
@@ -1962,17 +1972,17 @@ class _CameraBadge extends StatelessWidget {
       ),
       child: loading
           ? SizedBox.square(
-              dimension: iconSize,
-              child: const CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
+        dimension: iconSize,
+        child: const CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        ),
+      )
           : Icon(
-              Icons.photo_camera_rounded,
-              color: Colors.white,
-              size: iconSize,
-            ),
+        Icons.photo_camera_rounded,
+        color: Colors.white,
+        size: iconSize,
+      ),
     );
   }
 }
@@ -2260,7 +2270,7 @@ class _CuisinePickerSheet extends StatelessWidget {
                   final cuisine = cuisines[index];
                   final selected =
                       cuisine.id == selectedCuisine?.id ||
-                      cuisine.translatedName == selectedCuisine?.translatedName;
+                          cuisine.translatedName == selectedCuisine?.translatedName;
 
                   return Material(
                     color: selected

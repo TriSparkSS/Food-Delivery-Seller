@@ -1,12 +1,15 @@
 
 import 'package:flutter/material.dart';
-import 'package:qadam_food_seller/features/seller/screens/seller_dashboard_screen.dart';
 import 'package:qadam_food_seller/features/seller/screens/seller_menu_screen.dart';
 
 import '../../../theme/app_theme.dart';
 import '../../auth/data/seller_auth_api.dart';
 import '../../auth/data/seller_auth_token_storage.dart';
 import '../../auth/screens/auth_screen.dart';
+import '../../auth/screens/profile_review_screen.dart';
+import '../../auth/screens/store_details_screen.dart';
+import 'business_hours_screen.dart';
+import 'operations_settings_screen.dart';
 
 class SellerSettingsScreen extends StatefulWidget {
   const SellerSettingsScreen({
@@ -27,21 +30,53 @@ class SellerSettingsScreen extends StatefulWidget {
 }
 
 class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
-  bool _holidayMode = false;
-  final List<bool> _businessDays = [true, true, true, true, true, true, false];
-  bool _newOrders = true;
-  bool _orderUpdates = true;
-  bool _reviews = false;
-  bool _promotions = false;
   bool _loggingOut = false;
   bool _deletingAccount = false;
+  bool _loadingProfile = false;
   bool _loadingStoreSummary = false;
+  bool _loadingBusinessHours = false;
+  SellerProfile? _settingsProfile;
   SellerRestaurantProfile? _settingsRestaurant;
+  String _businessHoursSummary = 'Loading schedule...';
 
   @override
   void initState() {
     super.initState();
-    _loadStoreSummary();
+    _loadSettingsData();
+  }
+
+  Future<void> _loadSettingsData() async {
+    await Future.wait([
+      _loadProfileSummary(),
+      _loadStoreSummary(),
+      _loadBusinessHoursSummary(),
+    ]);
+  }
+
+  Future<void> _loadProfileSummary() async {
+    if (_loadingProfile) return;
+
+    setState(() => _loadingProfile = true);
+    try {
+      final token = await widget.tokenStorage.loadToken();
+      final tokenType = await widget.tokenStorage.loadTokenType();
+
+      if (token == null || token.trim().isEmpty) {
+        throw const SellerAuthException('Authentication failed. Login again.');
+      }
+
+      final profile = await widget.authApi.fetchProfile(
+        token: token,
+        tokenType: tokenType,
+      );
+
+      if (!mounted) return;
+      setState(() => _settingsProfile = profile);
+    } on SellerAuthException catch (error) {
+      if (mounted) _showSettingsMessage(error.message, error: true);
+    } finally {
+      if (mounted) setState(() => _loadingProfile = false);
+    }
   }
 
   Future<void> _loadStoreSummary() async {
@@ -62,13 +97,108 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
       );
 
       if (!mounted) return;
-      setState(() {
-        _settingsRestaurant = restaurant;
-      });
+      setState(() => _settingsRestaurant = restaurant);
     } on SellerAuthException catch (error) {
       if (mounted) _showSettingsMessage(error.message, error: true);
     } finally {
       if (mounted) setState(() => _loadingStoreSummary = false);
+    }
+  }
+
+  Future<void> _loadBusinessHoursSummary() async {
+    if (_loadingBusinessHours) return;
+
+    setState(() => _loadingBusinessHours = true);
+    try {
+      final token = await widget.tokenStorage.loadToken();
+      final tokenType = await widget.tokenStorage.loadTokenType();
+
+      if (token == null || token.trim().isEmpty) {
+        throw const SellerAuthException('Authentication failed. Login again.');
+      }
+
+      final hours = await widget.authApi.fetchBusinessHours(
+        token: token,
+        tokenType: tokenType,
+      );
+
+      if (!mounted) return;
+      setState(() => _businessHoursSummary = summarizeBusinessHours(hours));
+    } on SellerAuthException catch (error) {
+      if (mounted) {
+        setState(() => _businessHoursSummary = 'Unable to load schedule');
+        _showSettingsMessage(error.message, error: true);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _businessHoursSummary = 'Unable to load schedule');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingBusinessHours = false);
+    }
+  }
+
+  Future<void> _openProfileDetails() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ProfileReviewScreen(
+          authApi: widget.authApi,
+          tokenStorage: widget.tokenStorage,
+          profile: _settingsProfile,
+          readOnly: true,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _loadProfileSummary();
+  }
+
+  Future<void> _openStoreDetails() async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (context) => StoreDetailsScreen(
+          authApi: widget.authApi,
+          tokenStorage: widget.tokenStorage,
+          profile: _settingsProfile,
+          fromSettings: true,
+          onLoggedOut: widget.onLoggedOut,
+        ),
+      ),
+    );
+
+    if (updated == true && mounted) {
+      await _loadStoreSummary();
+    }
+  }
+
+  Future<void> _openOperations() async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (context) => OperationsSettingsScreen(
+          authApi: widget.authApi,
+          tokenStorage: widget.tokenStorage,
+          profile: _settingsProfile,
+        ),
+      ),
+    );
+
+    if (updated == true && mounted) {
+      await _loadStoreSummary();
+    }
+  }
+
+  Future<void> _openBusinessHours() async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (context) => BusinessHoursScreen(
+          authApi: widget.authApi,
+          tokenStorage: widget.tokenStorage,
+        ),
+      ),
+    );
+
+    if (updated == true && mounted) {
+      await _loadBusinessHoursSummary();
     }
   }
 
@@ -96,12 +226,9 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
       if (token != null && token.trim().isNotEmpty) {
         try {
           await widget.authApi.logout(token: token, tokenType: tokenType);
-        } catch (_) {
-          // Local logout should still complete if the remote session is already gone.
-        }
+        } catch (_) {}
       }
       await _clearSessionAndOpenGetStarted();
-
       openedAuth = true;
     } on SellerAuthException catch (error) {
       if (mounted) _showSettingsMessage(error.message, error: true);
@@ -135,7 +262,6 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
         await widget.authApi.deleteAccount(token: token, tokenType: tokenType);
       }
       await _clearSessionAndOpenGetStarted();
-
       openedAuth = true;
     } on SellerAuthException catch (error) {
       if (mounted) _showSettingsMessage(error.message, error: true);
@@ -174,270 +300,457 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AuthPalette>()!;
+    final profile = _settingsProfile;
     final restaurant = _settingsRestaurant;
     final statusColor = _settingsStatusColor(restaurant?.status, palette);
-    final statusLabel = _settingsStatusLabel(restaurant?.status);
-    final storeName =
-    restaurant?.restaurantName?.trim().isNotEmpty == true
+    final statusLabel = _settingsStatusText(restaurant?.status);
+    final profileName = profile?.ownerFullName?.trim().isNotEmpty == true
+        ? profile!.ownerFullName!.trim()
+        : 'Seller profile';
+    final profileEmail = profile?.email?.trim().isNotEmpty == true
+        ? profile!.email!.trim()
+        : 'Email not added';
+    final storeName = restaurant?.restaurantName?.trim().isNotEmpty == true
         ? restaurant!.restaurantName!.trim()
         : widget.restaurantName;
-    final city =
-    restaurant?.city?.trim().isNotEmpty == true
+    final city = restaurant?.city?.trim().isNotEmpty == true
         ? restaurant!.city!.trim()
         : 'City not set';
-
+    final minOrder = restaurant?.minimumOrderAmount;
+    final prepTime = restaurant?.averagePreparationTime;
+    final deliveryRadius = restaurant?.deliveryRadius;
     return SellerWorkScaffold(
       horizontalPadding: 18,
       title: 'Settings',
-      subtitle: 'Store, hours, alerts, and account',
-      trailing: const SellerHeaderIcon(Icons.settings_rounded),
+      subtitle: 'Manage your restaurant and account',
+      bottomPadding: 36,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SellerCard(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                _SettingsStoreLogo(
-                  logoUrl: restaurant?.restaurantLogo,
-                  loading: _loadingStoreSummary,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        storeName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: palette.text,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      SellerMutedText(city, fontSize: 13),
-                      const SizedBox(height: 3),
-                      Text(
-                        statusLabel,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  'Edit →',
-                  style: TextStyle(
-                    color: palette.mutedText,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+          _SettingsHeroCard(
+            storeName: storeName,
+            city: city,
+            statusLabel: statusLabel,
+            statusColor: statusColor,
+            logoUrl: restaurant?.restaurantLogo,
+            loading: _loadingStoreSummary,
+            ownerName: profileName,
+          ),
+          const SizedBox(height: 22),
+          _SettingsGroup(
+            title: 'Seller Account',
+            children: [
+              _SettingsNavTile(
+                icon: Icons.person_outline_rounded,
+                iconColor: palette.greenDark,
+                iconBackground: palette.softGreen.withValues(alpha: 0.9),
+                title: 'Profile Details',
+                subtitle: profileEmail,
+                onTap: _openProfileDetails,
+                trailing: _loadingProfile
+                    ? _SettingsLoadingDot(color: palette.greenDark)
+                    : null,
+              ),
+            ],
           ),
           const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF6F6),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFFFCECE), width: 1.1),
-            ),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Holiday Mode',
-                        style: TextStyle(
-                          color: Color(0xFFFF4338),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      SellerMutedText(
-                        'Pause all incoming orders',
-                        fontSize: 12,
-                      ),
-                    ],
-                  ),
-                ),
-                SellerSwitch(
-                  value: _holidayMode,
-                  onChanged: (value) => setState(() => _holidayMode = value),
-                  active: const Color(0xFFFF4338),
-                ),
-              ],
-            ),
+          _SettingsGroup(
+            title: 'Restaurant',
+            children: [
+              _SettingsNavTile(
+                icon: Icons.storefront_rounded,
+                iconColor: palette.greenDark,
+                iconBackground: palette.softGreen.withValues(alpha: 0.9),
+                title: 'Store Information',
+                subtitle: '$city · Cuisine, address, and branding',
+                onTap: _openStoreDetails,
+              ),
+              _SettingsDivider(),
+              _SettingsNavTile(
+                icon: Icons.schedule_rounded,
+                iconColor: const Color(0xFFFF9F0A),
+                iconBackground: const Color(0xFFFFF4E5),
+                title: 'Business Hours',
+                subtitle: _loadingBusinessHours
+                    ? 'Loading weekly schedule...'
+                    : _businessHoursSummary,
+                onTap: _openBusinessHours,
+                trailing: _loadingBusinessHours
+                    ? _SettingsLoadingDot(color: const Color(0xFFFF9F0A))
+                    : null,
+              ),
+            ],
           ),
           const SizedBox(height: 18),
-          SellerCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SellerSectionTitle('Business Hours', fontSize: 15),
-                const SizedBox(height: 18),
-                ...List.generate(_businessDays.length, (index) {
-                  const days = [
-                    'Mon',
-                    'Tue',
-                    'Wed',
-                    'Thu',
-                    'Fri',
-                    'Sat',
-                    'Sun',
-                  ];
-                  const hours = [
-                    '09:00 AM - 11:00 PM',
-                    '09:00 AM - 11:00 PM',
-                    '09:00 AM - 11:00 PM',
-                    '09:00 AM - 11:00 PM',
-                    '09:00 AM - 11:30 PM',
-                    '10:00 AM - 12:00 AM',
-                    'Closed',
-                  ];
-                  final closed = !_businessDays[index];
-                  return _SettingsRow(
-                    label: days[index],
-                    value: hours[index],
-                    valueColor: closed ? const Color(0xFFFF4338) : null,
-                    control: SellerSwitch(
-                      value: _businessDays[index],
-                      onChanged: (value) {
-                        setState(() => _businessDays[index] = value);
-                      },
-                    ),
-                  );
-                }),
-              ],
-            ),
+          _SettingsGroup(
+            title: 'Operations',
+            children: [
+              _SettingsInfoTile(
+                icon: Icons.shopping_bag_outlined,
+                title: 'Minimum Order',
+                value: minOrder == null ? '—' : '₹${_formatSettingsNumber(minOrder)}',
+              ),
+              _SettingsDivider(),
+              _SettingsInfoTile(
+                icon: Icons.timer_outlined,
+                title: 'Prep Time',
+                value: prepTime == null ? '—' : '$prepTime min',
+              ),
+              _SettingsDivider(),
+              _SettingsInfoTile(
+                icon: Icons.delivery_dining_outlined,
+                title: 'Delivery Radius',
+                value: deliveryRadius == null
+                    ? '—'
+                    : '${deliveryRadius.round()} km',
+              ),
+              _SettingsDivider(),
+              _SettingsNavTile(
+                icon: Icons.tune_rounded,
+                iconColor: palette.greenDark,
+                iconBackground: palette.softGreen.withValues(alpha: 0.9),
+                title: 'Update Operations',
+                subtitle: 'Edit min order, prep time, and delivery radius',
+                onTap: _openOperations,
+              ),
+            ],
           ),
           const SizedBox(height: 18),
-          SellerCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SellerSectionTitle('Delivery & Orders', fontSize: 15),
-                const SizedBox(height: 18),
-                const _SimpleSettingRow(
-                  label: 'Delivery Radius',
-                  value: '5 km',
+          _SettingsGroup(
+            title: 'Support',
+            children: [
+              _SettingsNavTile(
+                icon: Icons.help_outline_rounded,
+                iconColor: const Color(0xFF6B7280),
+                iconBackground: const Color(0xFFF3F4F6),
+                title: 'Help & Support',
+                subtitle: 'Contact support for account or payout issues',
+                onTap: () => _showSettingsMessage(
+                  'Support channel will be available soon.',
                 ),
-                const SellerDivider(),
-                const _SimpleSettingRow(
-                  label: 'Min. Order Value',
-                  value: r'$10.00',
+              ),
+              _SettingsDivider(),
+              _SettingsNavTile(
+                icon: Icons.description_outlined,
+                iconColor: const Color(0xFF6B7280),
+                iconBackground: const Color(0xFFF3F4F6),
+                title: 'Terms & Policies',
+                subtitle: 'Seller agreement and privacy policy',
+                onTap: () => _showSettingsMessage(
+                  'Policy documents will be available soon.',
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
-          SellerCard(
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE7F1FF),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text('🏦', style: TextStyle(fontSize: 21)),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'HDFC Bank',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      SellerMutedText('****4521', fontSize: 12),
-                    ],
-                  ),
-                ),
-                Text(
-                  'Change',
-                  style: TextStyle(
-                    color: palette.greenDark,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          SellerCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SellerSectionTitle('Notifications', fontSize: 15),
-                const SizedBox(height: 18),
-                _NotificationRow(
-                  label: 'New Orders',
-                  value: _newOrders,
-                  onChanged: (value) => setState(() => _newOrders = value),
-                ),
-                const SellerDivider(),
-                _NotificationRow(
-                  label: 'Order Updates',
-                  value: _orderUpdates,
-                  onChanged: (value) => setState(() => _orderUpdates = value),
-                ),
-                const SellerDivider(),
-                _NotificationRow(
-                  label: 'Reviews',
-                  value: _reviews,
-                  onChanged: (value) => setState(() => _reviews = value),
-                ),
-                const SellerDivider(),
-                _NotificationRow(
-                  label: 'Promotions',
-                  value: _promotions,
-                  onChanged: (value) => setState(() => _promotions = value),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          _SettingsActionButton(
-            icon: Icons.logout_rounded,
-            label: 'Logout',
-            loading: _loggingOut,
-            onTap: _showLogoutDialog,
-          ),
-          const SizedBox(height: 10),
-          _SettingsActionButton(
-            icon: Icons.delete_outline_rounded,
-            label: 'Delete Account',
-            destructive: true,
-            loading: _deletingAccount,
-            onTap: _showDeleteAccountDialog,
+          _SettingsGroup(
+            title: 'Account Actions',
+            children: [
+              _SettingsNavTile(
+                icon: Icons.logout_rounded,
+                iconColor: palette.greenDark,
+                iconBackground: palette.softGreen.withValues(alpha: 0.9),
+                title: 'Logout',
+                subtitle: 'Sign out from this device',
+                onTap: _loggingOut ? null : _showLogoutDialog,
+                trailing: _loggingOut
+                    ? _SettingsLoadingDot(color: palette.greenDark)
+                    : null,
+              ),
+              _SettingsDivider(),
+              _SettingsNavTile(
+                icon: Icons.delete_outline_rounded,
+                iconColor: const Color(0xFFFF4338),
+                iconBackground: const Color(0xFFFFF1F2),
+                title: 'Delete Account',
+                subtitle: 'Permanently remove your seller account',
+                onTap: _deletingAccount ? null : _showDeleteAccountDialog,
+                trailing: _deletingAccount
+                    ? _SettingsLoadingDot(color: const Color(0xFFFF4338))
+                    : null,
+                titleColor: const Color(0xFFFF4338),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+}
+
+class _SettingsHeroCard extends StatelessWidget {
+  const _SettingsHeroCard({
+    required this.storeName,
+    required this.city,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.logoUrl,
+    required this.loading,
+    required this.ownerName,
+  });
+
+  final String storeName;
+  final String city;
+  final String statusLabel;
+  final Color statusColor;
+  final String? logoUrl;
+  final bool loading;
+  final String ownerName;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return SellerCard(
+      highlight: true,
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          _SettingsStoreLogo(logoUrl: logoUrl, loading: loading),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  storeName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SellerMutedText('$ownerName · $city', fontSize: 12),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({
+    required this.title,
+    required this.children,
+  });
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              color: palette.mutedText,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+        SellerCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsNavTile extends StatelessWidget {
+  const _SettingsNavTile({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBackground,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+    this.trailing,
+    this.titleColor,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBackground;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+  final Color? titleColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              SellerIconBadge(
+                size: 42,
+                background: iconBackground,
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: titleColor ?? palette.text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.mutedText,
+                        fontSize: 12,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              trailing ??
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: palette.mutedText,
+                    size: 22,
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsInfoTile extends StatelessWidget {
+  const _SettingsInfoTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Icon(icon, color: palette.mutedText, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: palette.greenDark,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AuthPalette>()!;
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: palette.fieldBorder.withValues(alpha: 0.75),
+      indent: 70,
+    );
+  }
+}
+
+class _SettingsLoadingDot extends StatelessWidget {
+  const _SettingsLoadingDot({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 18,
+      child: CircularProgressIndicator(
+        strokeWidth: 2.2,
+        valueColor: AlwaysStoppedAnimation<Color>(color),
+      ),
+    );
+  }
+}
+
+String _formatSettingsNumber(num value) {
+  final formatted = value.toStringAsFixed(2);
+  return formatted.endsWith('.00')
+      ? formatted.substring(0, formatted.length - 3)
+      : formatted;
 }
 
 Color _settingsStatusColor(String? status, AuthPalette palette) {
@@ -458,24 +771,15 @@ Color _settingsStatusColor(String? status, AuthPalette palette) {
   return const Color(0xFFFF9F0A);
 }
 
-String _settingsStatusLabel(String? status) {
-  final label = _settingsStatusText(status);
-  final value = _normalizeSettingsStatus(status);
-  if (value == 'approved' || value == 'verified' || value == 'active') {
-    return '✓ $label';
-  }
-  return label;
-}
-
 String _settingsStatusText(String? status) {
   final text = status?.trim().replaceAll(RegExp(r'[_-]+'), ' ') ?? '';
-  if (text.isEmpty) return 'Checking status';
+  if (text.isEmpty) return 'Pending review';
   return text
       .split(RegExp(r'\s+'))
       .where((word) => word.isNotEmpty)
       .map((word) {
-        return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
-      })
+    return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+  })
       .join(' ');
 }
 
@@ -495,38 +799,42 @@ class _SettingsStoreLogo extends StatelessWidget {
     final url = logoUrl?.trim();
 
     Widget fallback() {
-      return Text(
-        '🌿',
-        style: const TextStyle(fontSize: 26, color: Colors.white),
-      );
+      return const Text('🌿', style: TextStyle(fontSize: 28, color: Colors.white));
     }
 
     return Container(
-      width: 56,
-      height: 56,
+      width: 64,
+      height: 64,
       alignment: Alignment.center,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: palette.greenDark,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: palette.greenDark.withValues(alpha: 0.18),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: loading
           ? const SizedBox.square(
-        dimension: 20,
-        child: CircularProgressIndicator(
-          strokeWidth: 2.2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-        ),
-      )
+              dimension: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
           : url == null || url.isEmpty
-          ? fallback()
-          : Image.network(
-        url,
-        width: 56,
-        height: 56,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => fallback(),
-      ),
+              ? fallback()
+              : Image.network(
+                  url,
+                  width: 64,
+                  height: 64,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => fallback(),
+                ),
     );
   }
 }
@@ -547,45 +855,22 @@ class _LogoutDialog extends StatelessWidget {
           color: palette.text,
           fontSize: 20,
           fontWeight: FontWeight.w800,
-          letterSpacing: 0,
         ),
       ),
       content: Text(
         'Are you sure you want to logout?',
-        style: TextStyle(
-          color: palette.mutedText,
-          fontSize: 14,
-          height: 1.35,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0,
-        ),
+        style: TextStyle(color: palette.mutedText, fontSize: 14, height: 1.35),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: Text(
-            'Cancel',
-            style: TextStyle(
-              color: palette.mutedText,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          child: Text('Cancel', style: TextStyle(color: palette.mutedText)),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          style: FilledButton.styleFrom(
-            backgroundColor: palette.greenDark,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const Text(
-            'Logout',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-          ),
+          style: FilledButton.styleFrom(backgroundColor: palette.greenDark),
+          child: const Text('Logout'),
         ),
       ],
     );
@@ -608,231 +893,25 @@ class _DeleteAccountDialog extends StatelessWidget {
           color: palette.text,
           fontSize: 20,
           fontWeight: FontWeight.w800,
-          letterSpacing: 0,
         ),
       ),
       content: Text(
-        'Are you sure you want to delete?',
-        style: TextStyle(
-          color: palette.mutedText,
-          fontSize: 14,
-          height: 1.35,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0,
-        ),
+        'Are you sure you want to delete your seller account?',
+        style: TextStyle(color: palette.mutedText, fontSize: 14, height: 1.35),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: Text(
-            'Cancel',
-            style: TextStyle(
-              color: palette.mutedText,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          child: Text('Cancel', style: TextStyle(color: palette.mutedText)),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFFFF4338),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
           ),
-          child: const Text(
-            'Yes',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-          ),
+          child: const Text('Delete'),
         ),
-      ],
-    );
-  }
-}
-
-class _SettingsActionButton extends StatelessWidget {
-  const _SettingsActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-    this.loading = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AuthPalette>()!;
-    final color = destructive ? const Color(0xFFFF4338) : palette.greenDark;
-    final background = destructive
-        ? const Color(0xFFFFF1F2)
-        : palette.softGreen.withValues(alpha: 0.72);
-
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: loading ? null : onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withValues(alpha: 0.22)),
-          ),
-          child: Row(
-            children: [
-              loading
-                  ? SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
-              )
-                  : Icon(icon, color: color, size: 19),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: color, size: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.label,
-    required this.value,
-    required this.control,
-    this.valueColor,
-  });
-
-  final String label;
-  final String value;
-  final Widget control;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AuthPalette>()!;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: palette.text.withValues(alpha: 0.75),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                color: valueColor ?? palette.mutedText,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          control,
-        ],
-      ),
-    );
-  }
-}
-
-class _SimpleSettingRow extends StatelessWidget {
-  const _SimpleSettingRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AuthPalette>()!;
-
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            color: value == '5 km' ? palette.greenDark : palette.text,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _NotificationRow extends StatelessWidget {
-  const _NotificationRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AuthPalette>()!;
-
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        SellerSwitch(value: value, onChanged: onChanged),
       ],
     );
   }

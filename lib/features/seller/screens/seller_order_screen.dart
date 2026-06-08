@@ -23,44 +23,55 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SellerSegmentedControl(
-            labels: const ['New (5)', 'Active (8)', 'Done', 'Cancelled'],
-            selectedIndex: _segment,
-            onChanged: (index) => setState(() => _segment = index),
+          SellerEntrance(
+            child: SellerSegmentedControl(
+              labels: const ['New (5)', 'Active (8)', 'Done', 'Cancelled'],
+              selectedIndex: _segment,
+              onChanged: (index) => setState(() => _segment = index),
+            ),
           ),
           const SizedBox(height: 18),
-          const _OrderCard(
-            orderId: '#ORD-2847',
-            customerInitials: 'AK',
-            customerName: 'Amit Kumar',
-            items: '2x Butter Chicken, 1x Naan, 1x Raita',
-            note: 'Extra spicy, no onion',
-            amount: r'$28.47',
-            minutesAgo: '2 min ago',
-            statusColor: Color(0xFFFF9F0A),
-            showActions: true,
+          const SellerEntrance(
+            delay: Duration(milliseconds: 70),
+            child: _OrderCard(
+              orderId: '#ORD-2847',
+              customerInitials: 'AK',
+              customerName: 'Amit Kumar',
+              items: '2x Butter Chicken, 1x Naan, 1x Raita',
+              note: 'Extra spicy, no onion',
+              amount: r'$28.47',
+              minutesAgo: '2 min ago',
+              statusColor: Color(0xFFFF9F0A),
+              showActions: true,
+            ),
           ),
           const SizedBox(height: 14),
-          const _OrderCard(
-            orderId: '#ORD-2846',
-            customerInitials: 'SP',
-            customerName: 'Sneha Patel',
-            items: '1x Paneer Tikka, 2x Biryani Special, 1x Mango Lassi',
-            amount: r'$42.96',
-            minutesAgo: '5 min ago',
-            statusColor: Color(0xFFFF9F0A),
-            showActions: true,
+          const SellerEntrance(
+            delay: Duration(milliseconds: 120),
+            child: _OrderCard(
+              orderId: '#ORD-2846',
+              customerInitials: 'SP',
+              customerName: 'Sneha Patel',
+              items: '1x Paneer Tikka, 2x Biryani Special, 1x Mango Lassi',
+              amount: r'$42.96',
+              minutesAgo: '5 min ago',
+              statusColor: Color(0xFFFF9F0A),
+              showActions: true,
+            ),
           ),
           const SizedBox(height: 14),
-          const _OrderCard(
-            orderId: '#ORD-2840',
-            customerInitials: 'MR',
-            customerName: 'Maya Reddy',
-            items: '3x Tandoori Platter, 2x Garlic Naan',
-            amount: r'$36.50',
-            badge: 'Preparing',
-            statusColor: Color(0xFF10B981),
-            progress: 0.7,
+          const SellerEntrance(
+            delay: Duration(milliseconds: 170),
+            child: _OrderCard(
+              orderId: '#ORD-2840',
+              customerInitials: 'MR',
+              customerName: 'Maya Reddy',
+              items: '3x Tandoori Platter, 2x Garlic Naan',
+              amount: r'$36.50',
+              badge: 'Preparing',
+              statusColor: Color(0xFF10B981),
+              progress: 0.7,
+            ),
           ),
         ],
       ),
@@ -269,13 +280,20 @@ class _OrderCard extends StatelessWidget {
                     const SizedBox(height: 16),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 6,
-                        backgroundColor: palette.fieldBorder,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          palette.greenDark,
-                        ),
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: 0, end: progress ?? 0),
+                        duration: const Duration(milliseconds: 680),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, child) {
+                          return LinearProgressIndicator(
+                            value: value,
+                            minHeight: 6,
+                            backgroundColor: palette.fieldBorder,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              palette.greenDark,
+                            ),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 8),
